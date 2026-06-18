@@ -9,6 +9,10 @@ metadata:
 spec:
   serviceName: test-runner
   replicas: {{ .Values.replicas }}
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 100%
   selector:
     matchLabels:
       app: {{ include "tperf.test-runner-name" . }}
@@ -38,6 +42,12 @@ spec:
         - name: teleport-bin
           mountPath: /opt/teleport-bin
           readOnly: true
+        - name: tbot
+          mountPath: /opt/machine-id
+          readOnly: true
       volumes:
-        - name: teleport-bin
-          emptyDir: {}
+      - name: teleport-bin
+        emptyDir: {}
+      - name: tbot
+        secret:
+          secretName: {{ .Release.Name }}-tbot-out

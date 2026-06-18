@@ -14,6 +14,7 @@ declare -r K8S_NAMESPACE="${K8S_NAMESPACE:-my-namespace}"
 declare -r K8S_SA="${K8S_SA:-my-sa}"
 
 declare -r DEBUG="${DEBUG:-}"
+declare -r OVERWRITE=''
 die() {
   echo >&2 "ERROR: ${*}"
   exit 1
@@ -33,6 +34,13 @@ OIDC_ISSUER="$(
 
 
 for f in $(dirname "${BASH_SOURCE}")/*.yaml; do
+  kind="$(basename "${f}" .yaml)"
+  name_ref="$(echo "${kind}" | tr 'a-z' 'A-Z')"
+  name="${!name_ref}"
+  [[ -z "${OVERWRITE}" ]] \
+    && tctl get "${kind}/${name}" >/dev/null \
+    && echo >&2 "${kind}/${name} already exists in Teleport, skipping creation." \
+    && continue
   cat "${f}" \
     | sed \
       -e "s~__BOT__~${BOT}~g" \

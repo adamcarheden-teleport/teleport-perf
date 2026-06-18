@@ -18,5 +18,7 @@ tbot:
   #token: "my-token
 
   # Don't override these. They're required for this chart.
-  persistence: "secret"
 
+  # Using a secret instead of a directory allows tbot to share the credentials
+  # it maintains across multiple pods.
+  persistence: "secret"

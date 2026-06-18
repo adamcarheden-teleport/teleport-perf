@@ -9,6 +9,10 @@ metadata:
 spec:
   serviceName: target
   replicas: {{ .Values.replicas }} 
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 100%
   selector:
     matchLabels:
       app: {{ include "tperf.target-name" . }}

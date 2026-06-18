@@ -1,0 +1,23 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "tperf.target-name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ include "tperf.target-name" . }}
+spec:
+  serviceName: target
+  replicas: {{ .Values.replicas }} 
+  selector:
+    matchLabels:
+      app: {{ include "tperf.target-name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "tperf.target-name" . }}
+    spec:
+      containers:
+      - name: target
+        image: busybox:latest
+        command: ["/bin/sh", "-c", "while true; do sleep 60; echo 'this pod just waits for the test to exec into it.'; done"]

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: tperf
+description: Runs comparative performance benchmark with and without Teleport
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

@@ -1,0 +1,43 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "tperf.test-runner-name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ include "tperf.test-runner-name" . }}
+spec:
+  serviceName: test-runner
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      app: {{ include "tperf.test-runner-name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "tperf.test-runner-name" . }}
+    spec:
+      serviceAccountName: {{ include "tperf.sa-name" . }}
+      initContainers:
+      - name: copy-teleport
+        image: "{{ .Values.teleport.repository }}:{{ .Values.teleport.tag }}"
+        command:
+        - /busybox/sh
+        - -ec
+        - |
+          cp "$(command -v tsh)" /teleport-bin/tsh
+          chmod +x /teleport-bin/tsh
+        volumeMounts:
+        - name: teleport-bin
+          mountPath: /teleport-bin
+      containers:
+      - name: test-runner
+        image: bitnami/kubectl:latest
+        command: ["/bin/sh", "-c", "while true; do sleep 30; echo 'TODO: Run tests'; done"]
+        volumeMounts:
+        - name: teleport-bin
+          mountPath: /opt/teleport-bin
+          readOnly: true
+      volumes:
+        - name: teleport-bin
+          emptyDir: {}

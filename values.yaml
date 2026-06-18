@@ -1,0 +1,7 @@
+# The number of tests that should be run in parallel
+replicas: 1
+
+# Controls the copy of the tbot image and tsh binary used
+teleport:
+  repository: public.ecr.aws/gravitational/teleport-distroless-debug
+  tag: "18.7.6"

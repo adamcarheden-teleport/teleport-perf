@@ -1,0 +1,8 @@
+---
+kind: bot
+version: v1
+metadata:
+  name: __BOT__
+spec:
+  roles:
+  - __ROLE__

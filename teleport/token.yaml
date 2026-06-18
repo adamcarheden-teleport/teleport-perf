@@ -1,0 +1,16 @@
+---
+kind: token
+version: v2
+metadata:
+  name: __TOKEN__
+  expires: "2050-01-01T00:00:00Z"
+spec:
+  roles: [Bot]
+  join_method: kubernetes
+  bot_name: __BOT__
+  kubernetes:
+    type: oidc
+    oidc:
+      issuer: "__OIDC_ISSUER__"
+    allow:
+      - service_account: "__K8S_NAMESPACE__:__K8S_SA__"

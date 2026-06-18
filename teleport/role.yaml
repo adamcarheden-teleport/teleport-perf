@@ -1,0 +1,27 @@
+---
+kind: role
+version: v8
+metadata:
+  name: __ROLE__
+spec:
+  allow:
+    # Set labels to match the teleport-joined k8s clusters your bot will run on.
+    kubernetes_labels:
+      '*': '*'
+    # Set the permissions your bot needs below. Both K8S and Teleport
+    # permissions are applied independently, so you must also create k8s
+    # RoleBindings/ClusterRoleBindings to permit the groups and/or users below
+    # equivalent access.
+    kubernetes_groups: ["__K8S_GROUP__"]
+    kubernetes_users: ["__BOT__"]
+    kubernetes_resources:
+      - kind: pods
+        api_group: "*"
+        namespace: "__K8S_NAMESPACE__"
+        name: "*"
+        verbs: ["get", "list", "exec"]
+      - kind: pods/exec
+        api_group: "*"
+        namespace: "__K8S_NAMESPACE__"
+        name: "*"
+        verbs: ["exec"]

@@ -1,7 +1,22 @@
 # The number of tests that should be run in parallel
 replicas: 1
 
-# Controls the copy of the tbot image and tsh binary used
-teleport:
+# The name of a group assigned to the bot by the Teleport Role.
+# This chart provisions the requsite K8S RBAC for this group.
+group: ""
+
+# Controls the version/source of the Teleport tsh binary used
+tsh:
   repository: public.ecr.aws/gravitational/teleport-distroless-debug
   tag: "18.7.6"
+
+# See https://github.com/gravitational/teleport/tree/master/examples/chart/tbot
+tbot:
+  # Configure these when you deploy this chart
+  #clusterName: "test.teleport.sh"
+  #teleportProxyAddress: "test.teleport.sh:443"
+  #token: "my-token
+
+  # Don't override these. They're required for this chart.
+  persistence: "secret"
+

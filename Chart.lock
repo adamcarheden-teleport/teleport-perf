@@ -1,0 +1,6 @@
+dependencies:
+- name: tbot
+  repository: https://charts.releases.teleport.dev
+  version: 18.9.0
+digest: sha256:ddf11c90848d0d29792042a47477685393cbc2b04d619c5e0b54fd0da00ee9d4
+generated: "2026-06-18T06:40:51.655586-06:00"

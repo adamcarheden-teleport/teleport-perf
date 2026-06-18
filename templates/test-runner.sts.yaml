@@ -20,7 +20,7 @@ spec:
       serviceAccountName: {{ include "tperf.sa-name" . }}
       initContainers:
       - name: copy-teleport
-        image: "{{ .Values.teleport.repository }}:{{ .Values.teleport.tag }}"
+        image: "{{ .Values.tsh.repository }}:{{ .Values.tsh.tag }}"
         command:
         - /busybox/sh
         - -ec

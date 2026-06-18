@@ -25,6 +25,9 @@ subjects:
   - kind: ServiceAccount
     name: {{ include "tperf.sa-name" . }}
     namespace: {{ .Release.Namespace }}
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: {{ include "tperf.group" . }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role

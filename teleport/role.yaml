@@ -15,13 +15,26 @@ spec:
     kubernetes_groups: ["__K8S_GROUP__"]
     kubernetes_users: ["__BOT__"]
     kubernetes_resources:
-      - kind: pods
-        api_group: "*"
-        namespace: "__K8S_NAMESPACE__"
-        name: "*"
-        verbs: ["get", "list", "exec"]
-      - kind: pods/exec
-        api_group: "*"
-        namespace: "__K8S_NAMESPACE__"
-        name: "*"
-        verbs: ["exec"]
+    # TODO: Implement teleport least priv
+    - api_group: '*'
+      kind: '*'
+      name: '*'
+      namespace: '*'
+      verbs:
+      - '*'
+#    kubernetes_resources:
+#      - kind: selfsubjectrulesreviews
+#        api_group: authorization.k8s.io
+#        namespace: '*'
+#        name: '*'
+#        verbs: ["create"]
+#      - kind: pods
+#        api_group: "*"
+#        namespace: "__K8S_NAMESPACE__"
+#        name: "*"
+#        verbs: ["get", "list"]
+#      - kind: pods/exec
+#        api_group: "*"
+#        namespace: "__K8S_NAMESPACE__"
+#        name: "*"
+#        verbs: ["create", "get"]

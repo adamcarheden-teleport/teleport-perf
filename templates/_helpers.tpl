@@ -10,6 +10,10 @@
 {{- printf "%s" .Release.Name -}}
 {{- end }}
 
+{{- define "tperf.scripts" -}}
+{{- printf "%s-scripts" .Release.Name -}}
+{{- end }}
+
 {{- define "tperf.group" -}}
 {{- required "Please set 'group' to the Group assigned to the bot by your Teleport role" .Values.group -}}
 {{- end }}

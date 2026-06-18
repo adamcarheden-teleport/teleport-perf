@@ -9,6 +9,7 @@ metadata:
 spec:
   serviceName: target
   replicas: {{ .Values.replicas }} 
+  podManagementPolicy: Parallel
   updateStrategy:
     type: RollingUpdate
     rollingUpdate:

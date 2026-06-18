@@ -1,0 +1,7 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "tperf.scripts" . }}
+data:
+{{ (.Files.Glob "files/*").AsConfig | indent 2 }}

@@ -9,6 +9,7 @@ metadata:
 spec:
   serviceName: test-runner
   replicas: {{ .Values.replicas }}
+  podManagementPolicy: Parallel
   updateStrategy:
     type: RollingUpdate
     rollingUpdate:
@@ -23,31 +24,51 @@ spec:
     spec:
       serviceAccountName: {{ include "tperf.sa-name" . }}
       initContainers:
-      - name: copy-teleport
-        image: "{{ .Values.tsh.repository }}:{{ .Values.tsh.tag }}"
+      - name: copy-kubectl
+        image: bitnami/kubectl:latest
         command:
-        - /busybox/sh
+        - sh
         - -ec
         - |
-          cp "$(command -v tsh)" /teleport-bin/tsh
-          chmod +x /teleport-bin/tsh
+          cp "$(command -v kubectl)" /opt/bin/
+          chmod +x /opt/bin/kubectl
         volumeMounts:
-        - name: teleport-bin
-          mountPath: /teleport-bin
+        - name: bin
+          mountPath: /opt/bin
       containers:
       - name: test-runner
-        image: bitnami/kubectl:latest
-        command: ["/bin/sh", "-c", "while true; do sleep 30; echo 'TODO: Run tests'; done"]
+        image: "{{ .Values.tsh.repository }}:{{ .Values.tsh.tag }}"
+        command: ["/busybox/sh", "-c", "while true; do sleep 30; echo 'TODO: Run tests'; done"]
+        env:
+        - name: PATH
+          value: /opt/scripts:/opt/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/busybox
+        - name: TELEPORT_PROXY
+          value: {{ .Values.tbot.teleportProxyAddress }}
+        # See: https://goteleport.com/docs/reference/machine-workload-identity/configuration/#identitykey-agent
+        - name: TELEPORT_KEY_AGENT_DIR
+          value: /opt/machine-id
+        - name: TELEPORT_IDENTITY_FILE
+          value: /opt/machine-id/identity
         volumeMounts:
-        - name: teleport-bin
-          mountPath: /opt/teleport-bin
+        - name: bin
+          mountPath: /opt/bin
           readOnly: true
         - name: tbot
           mountPath: /opt/machine-id
           readOnly: true
+        - name: scripts
+          mountPath: /opt/scripts
+          readOnly: true
       volumes:
-      - name: teleport-bin
+      # binaries we copy from other containers
+      - name: bin
         emptyDir: {}
+      # tbot-managed credentials
       - name: tbot
         secret:
-          secretName: {{ .Release.Name }}-tbot-out
+          secretName: {{ required "Please let tbot_secret to the name of a kubernetes service with a kubernetes_secret destination configured in tbot.services or tbot.outputs values for this chart" .Values.tbot_secret }}
+      # Static scripts
+      - name: scripts
+        configMap:
+          name: {{ include "tperf.scripts" . }}
+          defaultMode: 0755

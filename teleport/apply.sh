@@ -14,7 +14,7 @@ declare -r K8S_NAMESPACE="${K8S_NAMESPACE:-my-namespace}"
 declare -r K8S_SA="${K8S_SA:-my-sa}"
 
 declare -r DEBUG="${DEBUG:-}"
-declare -r OVERWRITE=''
+declare -r OVERWRITE="${OVERWRITE:-}"
 die() {
   echo >&2 "ERROR: ${*}"
   exit 1

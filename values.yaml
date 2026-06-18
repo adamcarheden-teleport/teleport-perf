@@ -1,3 +1,6 @@
+---
+tbot_secret: "" # Must match tbot.services[].destination.name
+
 # The number of tests that should be run in parallel
 replicas: 1
 
@@ -11,14 +14,8 @@ tsh:
   tag: "18.7.6"
 
 # See https://github.com/gravitational/teleport/tree/master/examples/chart/tbot
-tbot:
+#tbot:
   # Configure these when you deploy this chart
   #clusterName: "test.teleport.sh"
   #teleportProxyAddress: "test.teleport.sh:443"
   #token: "my-token
-
-  # Don't override these. They're required for this chart.
-
-  # Using a secret instead of a directory allows tbot to share the credentials
-  # it maintains across multiple pods.
-  persistence: "secret"

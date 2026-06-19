@@ -11,8 +11,9 @@ declare -r JOB_NAME="${JOB_NAME:-${2:-example}}"
 declare -r CLUSTER_YAML="${CLUSTER_D}/${CLUSTER}.yaml"
 declare -r JOB_YAML="${JOB_D}/${JOB_NAME}.yaml"
 declare -r RESULTS_TSV="${RESULTS_D}/${JOB_NAME}.tsv"
+declare -r STATUS_YAML="${RESULTS_D}/${JOB_NAME}.status.yaml"
 
-declare -r DEBUG="${DEBUG:-}"
+declare DEBUG="${DEBUG:-}" # Not r/o so we can set it in subshells
 declare -r FORCE="${FORCE:-}"
 
 # TODO: Get these from config
@@ -23,12 +24,16 @@ declare -r NAMESPACE="teleport-performance"
 declare -r GROUP="${NAME}"
 declare -r TOKEN="${NAME}-bot"
 declare -r K8S_JOB_NAME="${RELEASE}-test-runner"
+declare -r K8S_COMMON_LABELS="app.kubernetes.io/name=tperf,app.kubernetes.io/instance=${RELEASE}"
+declare -r K8S_RUNNER_LABELS="${K8S_COMMON_LABELS},app.kubernetes.io/component=test-runner"
+declare -r K8S_TARGET_LABELS="${K8S_COMMON_LABELS},app.kubernetes.io/component=target"
+
 
 declare -r REPLICAS="$(cat "${JOB_YAML}" | yq -e .replicas)" \
   || die "Failed to get replicas"
 
 msg() {
-  printf >&2 "\n-= %s =-\n" "${*}"
+  printf >&2 "\n\n-= %s =-\n\n" "${*}"
 }
 die() {
   msg "ERROR: ${*}"
@@ -55,7 +60,7 @@ has_condition() {
   local timeout="${2:-0}"
   [[ -n "${condition}" ]] || die "no condition provided"
   started || return 1
-  run_kubectl >>/dev/null wait "--for=condition=${condition}" \
+  run_kubectl >/dev/null 2>/dev/null wait "--for=condition=${condition}" \
     "job/${K8S_JOB_NAME}" --timeout="${timeout}s"
 }
 complete() {

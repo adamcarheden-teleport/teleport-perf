@@ -6,16 +6,22 @@ declare -r MY_D="$(readlink -f "$(dirname "${BASH_SOURCE}")")"
 
 if force || [[ ! -f "${RESULTS_TSV}" ]]; then
   complete || die "Job isn't complete yet (or hasn't been started)"
-  run_kubectl \
-    exec "${RELEASE}-target-0" -- head -n1 "/results/results.tsv.0" \
+  (DEBUG=t; run_kubectl \
+    exec "${RELEASE}-target-0" -- head -n1 "/results/results.tsv.0") \
     > "${RESULTS_TSV}"
   for i in $(seq 1 ${REPLICAS}); do
     ii=$((i - 1))
-    run_kubectl \
+    (DEBUG=t; run_kubectl \
       exec "${RELEASE}-target-${ii}" -- \
-      cat "/results/results.tsv.${ii}" \
+      cat "/results/results.tsv.${ii}") \
       | grep -v '^#' >> "${RESULTS_TSV}"
   done
 fi
 
+# Save job status for posterity
+# 'started' shouldn't be needed, just a sanity check before overwriting status
+started \
+  && run_kubectl get "jobs/${K8S_JOB_NAME}" -o yaml > "${STATUS_YAML}"
+
 cat "${RESULTS_TSV}" | column -t
+cat "${STATUS_YAML}" | yq .status

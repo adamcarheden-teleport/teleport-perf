@@ -20,8 +20,8 @@ if ! force; then
   fi
   if running; then
     msg "Job still running"
-    run_kubectl get "job/${K8S_JOB_NAME}"
-    run_kubectl get pods -l "app.kubernetes.io/name=tperf,app.kubernetes.io/component=test-runner,app.kubernetes.io/instance=${RELEASE}}"
+    (DEBUG=t run_kubectl get "job/${K8S_JOB_NAME}")
+    (DEBUG=t run_kubectl get pods -l "${K8S_TARGET_LABELS}")
     exit 0
   fi
 fi
@@ -38,9 +38,22 @@ K8S_SA="${RELEASE}" \
 "${ROOT_D}/teleport/apply.sh" "${CONTEXT}" \
 || die "Failed to apply teleport objects"
 
-msg "Deleting old jobs"
-run_kubectl delete "job/${K8S_JOB_NAME}" --ignore-not-found \
-  || die "Failed to clean up old jobs"
+if [[ -e "${RESULTS_TSV}" || -e "${STATUS_YAML}" ]]; then
+  msg "Archiving old results"
+  arc_ts="$(date +%s)"
+  [[ -e "${RESULTS_TSV}" ]] \
+    && (set -x; mv "${RESULTS_TSV}" "${RESULTS_TSV}.archived_at_${arc_ts}")
+    || die "Failed to archive old results"
+  [[ -e "${STATUS_YAML}" ]] \
+    && (set -x; mv "${STATUS_YAML}" "${STATUS_YAML}.archived_at_${arc_ts}")
+    || die "Failed to archive old results"
+fi
+
+if started; then
+  msg "Deleting old jobs"
+  run_kubectl delete "job/${K8S_JOB_NAME}" --ignore-not-found \
+    || die "Failed to clean up old jobs"
+fi
 
 msg "Ensuring helm deps"
 helm dependency build >&2 . \

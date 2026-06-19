@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+exec kubectl --config /opt/machine-id/kubeconfig.yaml "${@}"

@@ -21,48 +21,39 @@ spec:
     metadata:
       labels:
         app: {{ include "tperf.test-runner-name" . }}
+      annotations:
+        # So configmap changes make this sts reload
+        checksum/scripts: {{ (.Files.Glob "files/*").AsConfig | sha256sum | quote }}
     spec:
       serviceAccountName: {{ include "tperf.sa-name" . }}
-      initContainers:
-      - name: copy-kubectl
-        image: bitnami/kubectl:latest
-        command:
-        - sh
-        - -ec
-        - |
-          cp "$(command -v kubectl)" /opt/bin/
-          chmod +x /opt/bin/kubectl
-        volumeMounts:
-        - name: bin
-          mountPath: /opt/bin
       containers:
       - name: test-runner
-        image: "{{ .Values.tsh.repository }}:{{ .Values.tsh.tag }}"
-        command: ["/busybox/sh", "-c", "while true; do sleep 30; echo 'TODO: Run tests'; done"]
+        image: bitnami/kubectl:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          trap 'exit 0' TERM INT
+          while true; do
+            sleep 10 &
+            wait $!
+            echo 'TODO: Run tests'
+          done
         env:
         - name: PATH
-          value: /opt/scripts:/opt/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/busybox
+          value: /opt/bin:/opt/bitnami/common/bin:/opt/bitnami/kubectl/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin # kubectl
         - name: TELEPORT_PROXY
           value: {{ .Values.tbot.teleportProxyAddress }}
-        # See: https://goteleport.com/docs/reference/machine-workload-identity/configuration/#identitykey-agent
-        - name: TELEPORT_KEY_AGENT_DIR
-          value: /opt/machine-id
-        - name: TELEPORT_IDENTITY_FILE
-          value: /opt/machine-id/identity
+        - name: TARGET_PREFIX
+          value: {{ include "tperf.target-name" . }}
         volumeMounts:
-        - name: bin
-          mountPath: /opt/bin
-          readOnly: true
         - name: tbot
           mountPath: /opt/machine-id
           readOnly: true
         - name: scripts
-          mountPath: /opt/scripts
+          mountPath: /opt/bin
           readOnly: true
       volumes:
-      # binaries we copy from other containers
-      - name: bin
-        emptyDir: {}
       # tbot-managed credentials
       - name: tbot
         secret:

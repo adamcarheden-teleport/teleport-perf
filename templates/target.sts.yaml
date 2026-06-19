@@ -25,4 +25,13 @@ spec:
       containers:
       - name: target
         image: busybox:latest
-        command: ["/bin/sh", "-c", "while true; do sleep 60; echo 'this pod just waits for the test to exec into it.'; done"]
+        command:
+        - /bin/sh
+        - -c
+        - |
+          trap 'exit 0' TERM INT
+          while true; do
+            sleep 10 &
+            wait $!
+            echo 'TODO: Run tests'
+          done

@@ -1,6 +1,6 @@
-#!/busybox/env sh
+#!/usr/bin/env bash
 
-TELEPORT_KUBECONFIG="${TELEPORT_KEY_AGENT_DIR}/kubeconfig.yaml"
+TELEPORT_KUBECONFIG="/opt/machine-id/kubeconfig.yaml"
 
 msg() {
   printf >&2 "\n%s\n\n" "${*}"
@@ -21,6 +21,8 @@ fi
 
 TP_CONTEXT="$(kubectl --kubeconfig="${TELEPORT_KUBECONFIG}" config current-context)" \
   || die "Teleport's kubeconfig '${TELEPORT_KUBECONFIG}' has no default context. Did you configure a cluster in tbot?"
+test -z "${TELEPORT_PROXY:-}" \
+  && die "TELEPORT_PROXY not set. We need this to know what context to look for."
 prefix="${TELEPORT_PROXY%:*}-"
 if echo "${TP_CONTEXT}" | grep -q "^${prefix}"; then
   msg "Teleport's kubeconfig '${TELEPORT_KUBECONFIG}' has a context set that starts with the proxy name '${prefix}', as expected."

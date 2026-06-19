@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+msg() {
+  printf >&2 "%s\n" "${*}"
+}
+
+die() {
+  msg "ERROR: ${*}"
+  exit 1
+}
+
+declare -r ITERATIONS="${ITERATIONS:-1}"
+declare -r CMD="${CMD:-echo hello}"
+declare -r OUT="${OUT:-/dev/shm/output.tsv}"
+declare -r TX_COUNT="${TX_COUNT:-0}"
+declare -r TX_BLOCK_SIZE="${TX_BLOCK_SIZE:-0}"
+declare -r TX_INFILE="${TX_INFILE:-/dev/zero}"
+
+declare -r TELEPORT_KUBECONFIG="${TELEPORT_KUBECONFIG:-/opt/machine-id/kubeconfig.yaml}"
+
+[[ -r "${TELEPORT_KUBECONFIG}" ]] \
+  || die "Teleport kubeconfig '${TELEPORT_KUBECONFIG}' isn't readable or doesn't exist"
+
+declare -r ORDINAL="${HOSTNAME##*-}"
+[[ "${ORDINAL}" =~ ^[0-9][0-9]*$ ]] \
+  || die "Hostname '${HOSTNAME}' not suffixed with -#. Is this a stateful set?"
+
+declare -r TARGET_PREFIX="${TARGET_PREFIX:-}"
+[[ -n "${TARGET_PREFIX}" ]] \
+  || die "TARGET_PREFIX not set. Set it to the name of the remote StatefulSet we're running on."
+declare -r TARGET_POD="${TARGET_PREFIX}-${ORDINAL}"
+
+declare -r OUT_POD_NO_TP="${OUT_POD_NO_TP:-/dev/shm/${TARGET_POD}.no-teleport.yaml}"
+kubectl get "pod/${TARGET_POD}" -o yaml \
+  > "${OUT_POD_NO_TP}" \
+  || die "Failed to query target pod '${TARGET_POD}' without Teleport"
+declare -r OUT_POD_TP="${OUT_POD_TP:-/dev/shm/${TARGET_POD}.teleport.yaml}"
+kubectl --kubeconfig="${TELEPORT_KUBECONFIG}" get "pod/${TARGET_POD}" -o yaml \
+  > "${OUT_POD_TP}" \
+  || die "Failed to query target pod '${TARGET_POD}' with Teleport"
+
+diff "${OUT_POD_NO_TP}" "${OUT_POD_TP}" \
+  || die "Target pod '${TARGET_POD}' differ when queried with and without Teleport. Are you sure your contexts are configured to access the same k8s cluster?"
+
+run_test() {
+  local CONFIG_FLAG="${1:-}"
+  local before="$(date +%s%N)"
+  local read_cmd='printf ""'
+  [[ "${TX_BLOCK_SIZE}" -gt 0 ]] \
+    && read_cmd="dd if=${TX_INFILE} bs=${TX_BLOCK_SIZE} count=${TX_COUNT}"
+  (
+    set -x; \
+    ${read_cmd} \
+    | kubectl >&2 ${CONFIG_FLAG} exec -i "${TARGET_POD}" -- ${CMD}\
+  )
+  local ret="${?}"
+  local after="$(date +%s%N)"
+  printf "%d\t%d\t%d\n" "${before}" "${after}" "${ret}"
+}
+
+printf "# %s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+  "task number" \
+  iteration \
+  "non-teleport start (ns)" \
+  "non-teleport end (ns)" \
+  "non-teleport exit code" \
+  "teleport start (ns)" \
+  "teleport end (ns)" \
+  "teleport exit code" \
+  | tee "${OUT}" \
+  || die "Failed to print header"
+for i in $(seq 1 "${ITERATIONS}"); do
+
+  # Run without Teleport
+  x_results="$(run_test)" \
+    || die "Failed to run iteration '${i}' without Teleport"
+  IFS=$'\t' read -r x_start x_end x_ret <<< "${x_results}"
+  
+  # Run with Teleport
+  t_results="$(run_test "--kubeconfig=${TELEPORT_KUBECONFIG}")" \
+    || die "Failed to run iteration '${i}' with Teleport"
+  IFS=$'\t' read -r t_start t_end t_ret <<< "${t_results}"
+
+  # Append results to putput file
+  printf "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n" \
+    "${ORDINAL}" "${i}" \
+    "${x_start}" "${x_end}" "${x_ret}" \
+    "${t_start}" "${t_end}" "${t_ret}" \
+   | tee -a "${OUT}" \
+   || die "Failed to print iteration '${i}'"
+done
+
+msg "Benchmark run complete"

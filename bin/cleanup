@@ -1,0 +1,9 @@
+#!/bin/bash
+set -euo pipefail
+declare -r MY_D="$(readlink -f "$(dirname "${BASH_SOURCE}")")"
+. "${MY_D}/include.sh"
+
+msg "Uninstalling chart"
+helm uninstall "${RELEASE}" \
+  --kube-context "${CONTEXT}" \
+  --namespace "${NAMESPACE}"

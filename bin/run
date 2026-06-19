@@ -7,23 +7,32 @@ declare CMD="upgrade --install"
 
 DEBUG_FLAG=""
 OVERWRITE="${OVERWRITE:-}"
-if [[ -n "${DEBUG}" ]]; then
+if debug; then
   CMD="template"
   DEBUG_FLAG="--debug"
 fi
 
 if ! force; then 
+  debug && msg "checking if complete..."
   if complete; then
     msg "Job run and done, fetching results..."
-    "${ROOT_D}/bin/get-results"
+    "${ROOT_D}/bin/get-results" "${@}"
     exit 0
   fi
+  (DEBUG=t run_kubectl get "job/${K8S_JOB_NAME}" || true)
+  (DEBUG=t run_kubectl get pods -l "${K8S_RUNNER_LABELS}" || true)
+  debug && msg "not complete, checking if running..."
   if running; then
     msg "Job still running"
-    (DEBUG=t run_kubectl get "job/${K8S_JOB_NAME}")
-    (DEBUG=t run_kubectl get pods -l "${K8S_TARGET_LABELS}")
     exit 0
   fi
+  debug && msg "not running or complete, checking if failed..."
+  if failed; then
+    msg "Job failed. Run with envvar FORCE=true to run it again."
+    exit 1
+  fi
+else
+  debug && msg "Force enabled, skipped checking for existing runs"
 fi
 
 # export because we use them both here and in apply.sh
@@ -42,14 +51,15 @@ if [[ -e "${RESULTS_TSV}" || -e "${STATUS_YAML}" ]]; then
   msg "Archiving old results"
   arc_ts="$(date +%s)"
   [[ -e "${RESULTS_TSV}" ]] \
-    && (set -x; mv "${RESULTS_TSV}" "${RESULTS_TSV}.archived_at_${arc_ts}")
+    && (set -x; mv "${RESULTS_TSV}" "${RESULTS_TSV}.archived_at_${arc_ts}") \
     || die "Failed to archive old results"
   [[ -e "${STATUS_YAML}" ]] \
-    && (set -x; mv "${STATUS_YAML}" "${STATUS_YAML}.archived_at_${arc_ts}")
+    && (set -x; mv "${STATUS_YAML}" "${STATUS_YAML}.archived_at_${arc_ts}") \
     || die "Failed to archive old results"
 fi
 
 if started; then
+  # This let's us rerun without reinstalling the helm chart
   msg "Deleting old jobs"
   run_kubectl delete "job/${K8S_JOB_NAME}" --ignore-not-found \
     || die "Failed to clean up old jobs"

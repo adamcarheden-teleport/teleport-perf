@@ -3,7 +3,8 @@ set -euo pipefail
 declare -r MY_D="$(readlink -f "$(dirname "${BASH_SOURCE}")")"
 . "${MY_D}/include.sh"
 
-
+mkdir -p "$(dirname "${RESULTS_TSV}")" \
+  || die "Failed to make dir for '${RESULTS_TSV}'"
 if force || [[ ! -f "${RESULTS_TSV}" ]]; then
   complete || die "Job isn't complete yet (or hasn't been started)"
   (DEBUG=t; run_kubectl \
@@ -20,8 +21,9 @@ fi
 
 # Save job status for posterity
 # 'started' shouldn't be needed, just a sanity check before overwriting status
+mkdir -p "$(dirname "${STATUS_YAML}")" \
+  || die "Failed to make dir for '${STATUS_YAML}'"
 started \
   && run_kubectl get "jobs/${K8S_JOB_NAME}" -o yaml > "${STATUS_YAML}"
 
-cat "${RESULTS_TSV}" | column -t
-cat "${STATUS_YAML}" | yq .status
+"${ROOT_D}/bin/report" "${RESULTS_TSV}"

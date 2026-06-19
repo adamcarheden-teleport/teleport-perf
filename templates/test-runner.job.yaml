@@ -30,6 +30,8 @@ spec:
               fieldPath: metadata.annotations['batch.kubernetes.io/job-completion-index']
         - name: CMD
           value: {{ .Values.command | quote }}
+        - name: TYPE
+          value: {{ .Values.type | quote }}
         - name: ITERATIONS
           value: {{ .Values.iterations | quote }}
         - name: TX_COUNT

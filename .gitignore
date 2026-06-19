@@ -1,6 +1,8 @@
 charts/tbot-*.tgz
 results/**
+config/**
 test-config/**
-!test-config/example.yaml
+!test-config/example*.yaml
 cluster-config/**
-!cluster-config/example.yaml
+!cluster-config/example*.yaml
+bin/__pycache__/**

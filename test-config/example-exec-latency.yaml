@@ -1,0 +1,5 @@
+---
+iterations: 10
+replicas: 3
+type: "exec"
+command: "echo hello" # quick, tests latency

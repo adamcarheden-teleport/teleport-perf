@@ -3,6 +3,7 @@ import csv
 import math
 import os
 import sys
+from dataclasses import dataclass
 from statistics import mean
 from typing import TextIO
 
@@ -14,6 +15,20 @@ NAMES = {
     TP: "With Teleport",
     NO_TP: "Without Teleport",
 }
+PERCENTILES = (25, 50, 74, 95, 99)
+
+
+@dataclass(frozen=True)
+class ReportStats:
+    title: str
+    vals: list[float]
+    tasks: set[str]
+    errors: int
+    error_tasks: set[str]
+    min: float
+    avg: float
+    max: float
+    percentiles: dict[int, float]
 
 def percentile(vals: list[float], p: int) -> float:
     ys = sorted(vals)
@@ -43,25 +58,52 @@ def hist(vals: list[float], bins: int = 20, width: int = 50) -> list[str]:
 
     return lines
 
-def report(title: str,
-           vals: list[float],
-           tasks: set[str],
-           errors: int,
-           error_tasks: set[str]) -> None:
+def calculate_stats(title: str,
+                    vals: list[float],
+                    tasks: set[str],
+                    errors: int,
+                    error_tasks: set[str]) -> ReportStats | None:
     if not vals:
+        return None
+
+    return ReportStats(
+        title=title,
+        vals=vals,
+        tasks=tasks,
+        errors=errors,
+        error_tasks=error_tasks,
+        min=min(vals),
+        avg=mean(vals),
+        max=max(vals),
+        percentiles={p: percentile(vals, p) for p in PERCENTILES},
+    )
+
+
+def report(title: str, stats: ReportStats | None, other: ReportStats | None) -> None:
+    if stats is None:
         print(f"\n{title}: no successful runs :(")
         return
-    
+
+    def delta_str(value: float, other_value: float | None) -> str:
+        if other_value is None:
+            return ""
+        if other_value == 0:
+            return " (n/a)"
+        delta = ((value - other_value) / other_value) * 100
+        sign = "+" if delta >= 0 else ""
+        return f" ({sign}{delta:.1f}%)"
+
     print(f"""
--= {title} =-
-  runs - total:{len(vals)}, task:{len(tasks)}, total errors:{errors}, tasks with errors:{len(error_tasks)}
-timing - min:{min(vals):.3f}s, avg:{mean(vals):.3f}s, max:{max(vals):.3f}s
+-= {stats.title} =-
+  runs - total:{len(stats.vals)}, task:{len(stats.tasks)}, total errors:{stats.errors}, tasks with errors:{len(stats.error_tasks)}
+timing - min:{stats.min:.3f}s{delta_str(stats.min, None if other is None else other.min)}, avg:{stats.avg:.3f}s{delta_str(stats.avg, None if other is None else other.avg)}, max:{stats.max:.3f}s{delta_str(stats.max, None if other is None else other.max)}
 """)
-    for p in (25, 50, 74, 95, 99):
-        print(f"p{p:<2}:   {percentile(vals, p):.3f}s")
+    for p in PERCENTILES:
+        other_p = None if other is None else other.percentiles[p]
+        print(f"p{p:<2}:   {stats.percentiles[p]:.3f}s{delta_str(stats.percentiles[p], other_p)}")
 
     if os.getenv('HIST'):
-        print(f"\n{"\n".join(hist(vals))}")
+        print(f"\n{"\n".join(hist(stats.vals))}")
 
 def read_results(path: str) -> tuple[
     dict[str, list[float]],
@@ -99,8 +141,13 @@ def main() -> None:
     if len(sys.argv) != 2:
         raise SystemExit(f"usage: {sys.argv[0]} results.tsv")
     runs, tasks, errors, error_tasks = read_results(sys.argv[1])
+    stats = {
+        kind: calculate_stats(NAMES[kind], runs[kind], tasks, errors[kind], error_tasks[kind])
+        for kind in RUN_KINDS
+    }
     for kind in RUN_KINDS:
-        report(NAMES[kind], runs[kind], tasks, errors[kind], error_tasks[kind])
+        other_kind = TP if kind == NO_TP else NO_TP
+        report(NAMES[kind], stats[kind], stats[other_kind])
 
 if __name__ == "__main__":
     main()

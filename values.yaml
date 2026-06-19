@@ -16,7 +16,7 @@ tbot:
     - name: "" # Name k8s cluster used when joining Teleport
     destination:
       type: kubernetes_secret
-      name: "" # Name tbot uses for secret
+      name: "" # Name tbot uses for secret -- make this unique to this job
       namespace: "" # Namespace for secret
 
 ### Test Configuration
@@ -24,6 +24,8 @@ tbot:
 
 # Number of tests run by each job
 iterations: 1
+# Test type: 'exec' runs command in the target pod, 'ls' runs `kubectl get pods`
+type: "exec"
 # The number of tests that should be run. Probably in parallel, but depends on
 # how k8s schedules them.
 # TODO: Impmement barrier to ensure they run in parallel

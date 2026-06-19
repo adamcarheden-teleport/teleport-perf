@@ -5,7 +5,7 @@ metadata:
   name: {{ include "tperf.test-runner-name" . }}
   namespace: {{ .Release.Namespace }}
   labels:
-    app: {{ include "tperf.test-runner-name" . }}
+    {{- include "tperf.runner-labels" . | nindent 4 }}
 spec:
   completionMode: Indexed
   parallelism: {{ .Values.replicas }}
@@ -14,7 +14,7 @@ spec:
   template:
     metadata:
       labels:
-        app: {{ include "tperf.test-runner-name" . }}
+        {{- include "tperf.runner-labels" . | nindent 8 }}
     spec:
       restartPolicy: OnFailure
       serviceAccountName: {{ include "tperf.sa-name" . }}

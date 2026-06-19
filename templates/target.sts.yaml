@@ -5,7 +5,7 @@ metadata:
   name: {{ include "tperf.target-name" . }}
   namespace: {{ .Release.Namespace }}
   labels:
-    app: {{ include "tperf.target-name" . }}
+    {{- include "tperf.target-labels" . | nindent 4 }}
 spec:
   serviceName: target
   replicas: {{ .Values.replicas }} 
@@ -16,11 +16,11 @@ spec:
       maxUnavailable: 100%
   selector:
     matchLabels:
-      app: {{ include "tperf.target-name" . }}
+      {{- include "tperf.target-labels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        app: {{ include "tperf.target-name" . }}
+        {{- include "tperf.target-labels" . | nindent 8 }}
     spec:
       containers:
       - name: target

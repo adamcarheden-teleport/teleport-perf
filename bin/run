@@ -3,13 +3,8 @@ set -euo pipefail
 declare -r MY_D="$(readlink -f "$(dirname "${BASH_SOURCE}")")"
 . "${MY_D}/include.sh"
 
-declare -r DEBUG="${DEBUG:-}"
-die() {
-  echo >&2 "ERROR: ${*}"
-  exit 1
-}
+declare CMD="upgrade --install"
 
-CMD="upgrade --install"
 DEBUG_FLAG=""
 OVERWRITE="${OVERWRITE:-}"
 if [[ -n "${DEBUG}" ]]; then
@@ -17,7 +12,21 @@ if [[ -n "${DEBUG}" ]]; then
   DEBUG_FLAG="--debug"
 fi
 
-# Because we use them both here and in apply.sh
+if ! force; then 
+  if complete; then
+    msg "Job run and done, fetching results..."
+    "${ROOT_D}/bin/get-results"
+    exit 0
+  fi
+  if running; then
+    msg "Job still running"
+    run_kubectl get "job/${K8S_JOB_NAME}"
+    run_kubectl get pods -l "app.kubernetes.io/name=tperf,app.kubernetes.io/component=test-runner,app.kubernetes.io/instance=${RELEASE}}"
+    exit 0
+  fi
+fi
+
+# export because we use them both here and in apply.sh
 export TOKEN
 export DEBUG
 export OVERWRITE
@@ -29,11 +38,15 @@ K8S_SA="${RELEASE}" \
 "${ROOT_D}/teleport/apply.sh" "${CONTEXT}" \
 || die "Failed to apply teleport objects"
 
+msg "Deleting old jobs"
+run_kubectl delete "job/${K8S_JOB_NAME}" --ignore-not-found \
+  || die "Failed to clean up old jobs"
+
+msg "Ensuring helm deps"
 helm dependency build >&2 . \
   || die "Failed to build deps"
 
-run_kubectl delete "job/${RELEASE}-test-runner" --ignore-not-found \
-  || die "Failed to clean up old jobs"
+msg "Installing chart"
 (set -x; helm ${CMD} \
   "${RELEASE}" "${ROOT_D}" \
   --kube-context "${CONTEXT}" \

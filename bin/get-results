@@ -3,13 +3,9 @@ set -euo pipefail
 declare -r MY_D="$(readlink -f "$(dirname "${BASH_SOURCE}")")"
 . "${MY_D}/include.sh"
 
-declare FORCE="${FORCE:-}"
 
-declare -r REPLICAS="$(cat "${JOB_YAML}" | yq -e .replicas)" \
-  || die "Failed to get replicas"
-
-
-if [[ ! -f "${RESULTS_TSV}" || -n "${FORCE}" ]]; then
+if force || [[ ! -f "${RESULTS_TSV}" ]]; then
+  complete || die "Job isn't complete yet (or hasn't been started)"
   run_kubectl \
     exec "${RELEASE}-target-0" -- head -n1 "/results/results.tsv.0" \
     > "${RESULTS_TSV}"

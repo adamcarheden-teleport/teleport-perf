@@ -27,3 +27,19 @@
 {{- define "tperf.results-dir" -}}
 {{- printf "/results" -}}
 {{- end }}
+
+
+{{- define "tperf.common-labels" -}}
+app.kubernetes.io/name: tperf
+app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+
+{{- define "tperf.target-labels" -}}
+{{ include "tperf.common-labels" . }}
+app.kubernetes.io/component: target
+{{- end }}
+
+{{- define "tperf.runner-labels" -}}
+{{ include "tperf.common-labels" . }}
+app.kubernetes.io/component: test-runner
+{{- end }}

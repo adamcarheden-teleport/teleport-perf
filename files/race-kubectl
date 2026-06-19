@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Uncomment to debug pod before run
+#trap 'exit 0' TERM INT
+#while true; do
+#  sleep 10 &
+#  wait $!
+#  echo 'Waiting for you to debugtest-runner'
+#done
+
+# Mark start in the logs
+date >&2
+
 msg() {
   printf >&2 "%s\n" "${*}"
 }
@@ -13,7 +24,7 @@ die() {
 declare -r ITERATIONS="${ITERATIONS:-1}"
 declare -r CMD="${CMD:-echo hello}"
 declare -r OUT="${OUT:-/dev/shm/output.tsv}"
-declare -r OUT_TARGET="${OUT_TARGET:-${OUT}}"
+declare -r OUT_TARGET_TEMPLATE="${OUT_TARGET_TEMPLATE:-${OUT}.#}"
 declare -r TX_COUNT="${TX_COUNT:-0}"
 declare -r TX_BLOCK_SIZE="${TX_BLOCK_SIZE:-0}"
 declare -r TX_INFILE="${TX_INFILE:-/dev/zero}"
@@ -24,9 +35,11 @@ declare -r TELEPORT_KUBECONFIG="${TELEPORT_KUBECONFIG:-/opt/machine-id/kubeconfi
 [[ -r "${TELEPORT_KUBECONFIG}" ]] \
   || die "Teleport kubeconfig '${TELEPORT_KUBECONFIG}' isn't readable or doesn't exist"
 
-declare -r ORDINAL="${HOSTNAME##*-}"
+declare -r ORDINAL="${ORDINAL:-NOT_SET}"
 [[ "${ORDINAL}" =~ ^[0-9][0-9]*$ ]] \
-  || die "Hostname '${HOSTNAME}' not suffixed with -#. Is this a stateful set?"
+  || die "ORDINAL '${ORDINAL}' not set or not a number. ORDINAL must be set to match the index of a target pod. This should be done by using in Indexed Job and setting it to the annotation 'batch.kubernetes.io/job-completion-index'"
+
+declare -r OUT_TARGET="${OUT_TARGET_TEMPLATE//\#/$ORDINAL}"
 
 declare -r TARGET_PREFIX="${TARGET_PREFIX:-}"
 [[ -n "${TARGET_PREFIX}" ]] \
@@ -66,9 +79,10 @@ kubectl wait \
   --for=condition=ready \
   --timeout="${MAX_READY_WAIT}" \
   || die "Target pod '${TARGET_POD}' was not ready after '${MAX_READY_WAIT}'"
+msg "Seeing permission errors about 'wait' above? Add perms, but things are still working. kubectl falls back to polling if it doesn't have wait perms."
 
-printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
-  "task#" \
+printf "#%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+  "task" \
   iter \
   "start_no_tp" \
   "end_no_tp" \
@@ -104,11 +118,9 @@ msg "Benchmark run complete, output at '${OUT}'"
 if [[ -n "${OUT_TARGET}" ]]; then
   msg "Copying output to target"
   (set -x; kubectl cp "${OUT}" "${TARGET_POD}:${OUT_TARGET}")
+else
+  msg "OUT_TARGET_TEMPLATE not set, not copying to target pod"
 fi
 
-trap 'exit 0' TERM INT
-while true; do
-  echo 'TODO: Remove this after converting from Deploy to Job'
-  sleep 10 &
-  wait $!
-done
+# Mark complete on the logs
+date >&2

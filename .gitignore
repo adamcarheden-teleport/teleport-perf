@@ -1,1 +1,6 @@
 charts/tbot-*.tgz
+results/**
+test-config/**
+!test-config/example.yaml
+cluster-config/**
+!cluster-config/example.yaml

@@ -1,0 +1,8 @@
+---
+iterations: 3
+replicas: 3
+command: "echo hello" # quick, tests latency
+input:
+  count: 0
+  block_size: 0
+  file: "/dev/zero"

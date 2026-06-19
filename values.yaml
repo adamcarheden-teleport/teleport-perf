@@ -41,6 +41,9 @@ input:
   # should't be possible/effective a lower levels of the stack.
   file: "/dev/zero"
 
+# How long to wait for the target pod to become ready
 max_wait: "5m"
+# How many times to retry failed jobs
+backoff_limit: 3
 
 ##############################################################################

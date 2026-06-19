@@ -1,0 +1,47 @@
+#!/bin/bash
+set -euo pipefail
+declare -r MY_D="$(readlink -f "$(dirname "${BASH_SOURCE}")")"
+. "${MY_D}/include.sh"
+
+declare -r DEBUG="${DEBUG:-}"
+die() {
+  echo >&2 "ERROR: ${*}"
+  exit 1
+}
+
+CMD="upgrade --install"
+DEBUG_FLAG=""
+OVERWRITE="${OVERWRITE:-}"
+if [[ -n "${DEBUG}" ]]; then
+  CMD="template"
+  DEBUG_FLAG="--debug"
+fi
+
+# Because we use them both here and in apply.sh
+export TOKEN
+export DEBUG
+export OVERWRITE
+BOT="${NAME}-bot" \
+ROLE="${NAME}" \
+K8S_GROUP="${GROUP}" \
+K8S_NAMESPACE="${NAMESPACE}" \
+K8S_SA="${RELEASE}" \
+"${ROOT_D}/teleport/apply.sh" "${CONTEXT}" \
+|| die "Failed to apply teleport objects"
+
+helm dependency build >&2 . \
+  || die "Failed to build deps"
+
+run_kubectl delete "job/${RELEASE}-test-runner" --ignore-not-found \
+  || die "Failed to clean up old jobs"
+(set -x; helm ${CMD} \
+  "${RELEASE}" "${ROOT_D}" \
+  --kube-context "${CONTEXT}" \
+  --namespace "${NAMESPACE}" \
+  --set group="${GROUP}" \
+  --set tbot.token="${TOKEN}" \
+  -f "${JOB_YAML}" \
+  -f "${CLUSTER_YAML}" \
+  ${DEBUG_FLAG}
+  ) \
+  || die "Failed to helm"

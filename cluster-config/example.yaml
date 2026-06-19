@@ -1,0 +1,12 @@
+---
+tbot:
+  clusterName: "adamcarheden-oai.az.teleportdemo.net"
+  teleportProxyAddress: "adamcarheden-oai.az.teleportdemo.net:443"
+  services:
+  - type: kubernetes/v2
+    selectors:
+    - name: c-westus2-aks
+    destination:
+      type: kubernetes_secret
+      name: tperf-tbot-kubeconfig
+      namespace: teleport-performance

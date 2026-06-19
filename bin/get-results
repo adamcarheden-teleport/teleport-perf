@@ -1,0 +1,25 @@
+#!/bin/bash
+set -euo pipefail
+declare -r MY_D="$(readlink -f "$(dirname "${BASH_SOURCE}")")"
+. "${MY_D}/include.sh"
+
+declare FORCE="${FORCE:-}"
+
+declare -r REPLICAS="$(cat "${JOB_YAML}" | yq -e .replicas)" \
+  || die "Failed to get replicas"
+
+
+if [[ ! -f "${RESULTS_TSV}" || -n "${FORCE}" ]]; then
+  run_kubectl \
+    exec "${RELEASE}-target-0" -- head -n1 "/results/results.tsv.0" \
+    > "${RESULTS_TSV}"
+  for i in $(seq 1 ${REPLICAS}); do
+    ii=$((i - 1))
+    run_kubectl \
+      exec "${RELEASE}-target-${ii}" -- \
+      cat "/results/results.tsv.${ii}" \
+      | grep -v '^#' >> "${RESULTS_TSV}"
+  done
+fi
+
+cat "${RESULTS_TSV}" | column -t

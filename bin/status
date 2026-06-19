@@ -1,0 +1,7 @@
+#!/bin/bash
+set -euo pipefail
+declare -r MY_D="$(readlink -f "$(dirname "${BASH_SOURCE}")")"
+. "${MY_D}/include.sh"
+
+run_kubectl get jobs
+run_kubectl get pods

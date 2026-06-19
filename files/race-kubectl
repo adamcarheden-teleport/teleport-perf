@@ -13,9 +13,11 @@ die() {
 declare -r ITERATIONS="${ITERATIONS:-1}"
 declare -r CMD="${CMD:-echo hello}"
 declare -r OUT="${OUT:-/dev/shm/output.tsv}"
+declare -r OUT_TARGET="${OUT_TARGET:-${OUT}}"
 declare -r TX_COUNT="${TX_COUNT:-0}"
 declare -r TX_BLOCK_SIZE="${TX_BLOCK_SIZE:-0}"
 declare -r TX_INFILE="${TX_INFILE:-/dev/zero}"
+declare -r MAX_READY_WAIT="${MAX_READY_WAIT:-5m}"
 
 declare -r TELEPORT_KUBECONFIG="${TELEPORT_KUBECONFIG:-/opt/machine-id/kubeconfig.yaml}"
 
@@ -59,15 +61,21 @@ run_test() {
   printf "%d\t%d\t%d\n" "${before}" "${after}" "${ret}"
 }
 
-printf "# %s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
-  "task number" \
-  iteration \
-  "non-teleport start (ns)" \
-  "non-teleport end (ns)" \
-  "non-teleport exit code" \
-  "teleport start (ns)" \
-  "teleport end (ns)" \
-  "teleport exit code" \
+kubectl wait \
+  "pod/${TARGET_POD}" \
+  --for=condition=ready \
+  --timeout="${MAX_READY_WAIT}" \
+  || die "Target pod '${TARGET_POD}' was not ready after '${MAX_READY_WAIT}'"
+
+printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+  "task#" \
+  iter \
+  "start_no_tp" \
+  "end_no_tp" \
+  "exit_code_no_tp" \
+  "start_tp" \
+  "end_tp" \
+  "exit_code_tp" \
   | tee "${OUT}" \
   || die "Failed to print header"
 for i in $(seq 1 "${ITERATIONS}"); do
@@ -91,4 +99,16 @@ for i in $(seq 1 "${ITERATIONS}"); do
    || die "Failed to print iteration '${i}'"
 done
 
-msg "Benchmark run complete"
+msg "Benchmark run complete, output at '${OUT}'"
+
+if [[ -n "${OUT_TARGET}" ]]; then
+  msg "Copying output to target"
+  (set -x; kubectl cp "${OUT}" "${TARGET_POD}:${OUT_TARGET}")
+fi
+
+trap 'exit 0' TERM INT
+while true; do
+  echo 'TODO: Remove this after converting from Deploy to Job'
+  sleep 10 &
+  wait $!
+done

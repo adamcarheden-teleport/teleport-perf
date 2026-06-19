@@ -35,3 +35,10 @@ spec:
             wait $!
             echo 'TODO: Run tests'
           done
+        volumeMounts:
+        - name: results
+          mountPath: {{ include "tperf.results-dir" . }}
+          readOnly: false
+      volumes:
+      - name: results
+        emptyDir: {}

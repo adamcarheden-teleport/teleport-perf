@@ -1,21 +1,46 @@
 ---
-tbot_secret: "" # Must match tbot.services[].destination.name
+### Required Configuration Items
+# Copy these to your values file and fill them in
 
-# The number of tests that should be run in parallel
-replicas: 1
-
-# The name of a group assigned to the bot by the Teleport Role.
-# This chart provisions the requsite K8S RBAC for this group.
-group: ""
-
-# Controls the version/source of the Teleport tsh binary used
-tsh:
-  repository: public.ecr.aws/gravitational/teleport-distroless-debug
-  tag: "18.7.6"
+group: "" # k8s group name for RoleBinding, should match Teleport Role
 
 # See https://github.com/gravitational/teleport/tree/master/examples/chart/tbot
-#tbot:
+tbot:
   # Configure these when you deploy this chart
-  #clusterName: "test.teleport.sh"
-  #teleportProxyAddress: "test.teleport.sh:443"
-  #token: "my-token
+  clusterName: "" # Teleport FQDN
+  teleportProxyAddress: "" # Teleport FQDN:443
+  token: "" # Name of Teleport token object for tbot join
+  services:
+  - type: kubernetes/v2
+    selectors:
+    - name: "" # Name k8s cluster used when joining Teleport
+    destination:
+      type: kubernetes_secret
+      name: "" # Name tbot uses for secret
+      namespace: "" # Namespace for secret
+
+### Test Configuration
+# Copy the ones you want to modify to your values file
+
+# Number of tests run by each job
+iterations: 1
+# The number of tests that should be run. Probably in parallel, but depends on
+# how k8s schedules them.
+# TODO: Impmement barrier to ensure they run in parallel
+replicas: 1
+
+# Use `dd of=/dev/zero bs=# count=#` to send lots of data / test throughput 
+command: "echo hello" # quick, tests latency
+
+# Input to command via `dd`. Only matters of the command above reads data.
+input:
+  count: 0
+  block_size: 0
+  # Use /dev/urandom to uncompressable data Teleport doesn't do compression, but 
+  # your can verify nothing in the stack does. Since it's encrypted, compression
+  # should't be possible/effective a lower levels of the stack.
+  file: "/dev/zero"
+
+max_wait: "5m"
+
+##############################################################################

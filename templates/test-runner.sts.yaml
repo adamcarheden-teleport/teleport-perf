@@ -30,22 +30,28 @@ spec:
       - name: test-runner
         image: bitnami/kubectl:latest
         command:
-        - /bin/sh
-        - -c
-        - |
-          trap 'exit 0' TERM INT
-          while true; do
-            sleep 10 &
-            wait $!
-            echo 'TODO: Run tests'
-          done
+        - race-kubectl
         env:
+        - name: CMD
+          value: {{ .Values.command | quote }}
+        - name: ITERATIONS
+          value: {{ .Values.iterations | quote }}
+        - name: TX_COUNT
+          value: {{ .Values.input.count | quote }}
+        - name: TX_BLOCK_SIZE
+          value: {{ .Values.input.block_size | quote }}
+        - name: TX_INFILE
+          value: {{ .Values.input.file | quote }}
+        - name: MAX_READY_WAIT
+          value: {{ .Values.max_wait | quote }}
         - name: PATH
           value: /opt/bin:/opt/bitnami/common/bin:/opt/bitnami/kubectl/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin # kubectl
         - name: TELEPORT_PROXY
-          value: {{ .Values.tbot.teleportProxyAddress }}
+          value: {{ .Values.tbot.teleportProxyAddress | quote }}
         - name: TARGET_PREFIX
           value: {{ include "tperf.target-name" . }}
+        - name: OUT
+          value: {{ printf "%s/results.tsv" (include "tperf.results-dir" .) }}
         volumeMounts:
         - name: tbot
           mountPath: /opt/machine-id
@@ -53,13 +59,18 @@ spec:
         - name: scripts
           mountPath: /opt/bin
           readOnly: true
+        - name: results
+          mountPath: {{ include "tperf.results-dir" . }}
+          readOnly: false
       volumes:
       # tbot-managed credentials
       - name: tbot
         secret:
-          secretName: {{ required "Please let tbot_secret to the name of a kubernetes service with a kubernetes_secret destination configured in tbot.services or tbot.outputs values for this chart" .Values.tbot_secret }}
+          secretName: {{ required "Please set tbot.services[0].destination.name to the name of a kubernetes service with a kubernetes_secret destination configured in tbot.services or tbot.outputs values for this chart" (index .Values.tbot.services 0).destination.name }}
       # Static scripts
       - name: scripts
         configMap:
           name: {{ include "tperf.scripts" . }}
           defaultMode: 0755
+      - name: results
+        emptyDir: {}

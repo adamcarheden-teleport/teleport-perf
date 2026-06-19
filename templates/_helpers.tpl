@@ -23,3 +23,7 @@
 {{- define "tbot.serviceAccountName" -}}
 {{- include "tperf.sa-name" . -}}
 {{- end }}
+
+{{- define "tperf.results-dir" -}}
+{{- printf "/results" -}}
+{{- end }}

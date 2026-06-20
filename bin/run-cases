@@ -4,6 +4,7 @@ declare -r MY_D="$(readlink -f "$(dirname "${BASH_SOURCE}")")"
 declare -r ROOT_D="$(readlink -f "${MY_D}/..")"
 declare -r CONFIG_D="${CONFIG_D:-${ROOT_D}/config}"
 declare -r POLL_SECS="${POLL_SECS:-10}"
+declare -r STOP_ON_FAILURE="${STOP_ON_FAILURE:-}"
 
 usage() {
   printf >&2 "Usage: %s <cluster-config file>\n" "$(basename "${BASH_SOURCE}")"
@@ -21,6 +22,14 @@ cluster_file="${1}"
 cluster_name="$(basename "${cluster_file}")"
 cluster_name="${cluster_name%.yaml}"
 
+cleanup() {
+  local config_file="${1}"
+  "${ROOT_D}/bin/cleanup" "${config_file#${ROOT_D}/}" || {
+    printf >&2 "Cleanup failed for '%s'\n" "${config_file#${ROOT_D}/}"
+    exit 124
+  }
+}
+
 for config_file in "${CONFIG_D}/${cluster_name}".*; do
   [[ -e "${config_file}" ]] || continue
   while true; do
@@ -30,16 +39,26 @@ for config_file in "${CONFIG_D}/${cluster_name}".*; do
     set -e
 
     case "${ret}" in
-      0) # complete
+      0)
+        # complete
+        cleanup "${config_file}"
         break
         ;;
-      1|2) # started this run or still in progress
+      1|2)
+        # started this run or still in progress
         sleep "${POLL_SECS}"
         ;;
-      125) # failed
+      125)
+        # failed
+        if [[ -n "${STOP_ON_FAILURE}" && "${STOP_ON_FAILURE^^}" != "FALSE" ]]; then
+          echo >&2 "test case '${config_file}' failed and STOP_ON_FAILURE set, exiting..."
+          exit "${ret}"
+        fi
+        cleanup "${config_file}"
         break
         ;;
-      124) # die / unexpected hard failure
+      124)
+        # die / unexpected hard failure
         exit "${ret}"
         ;;
       *)

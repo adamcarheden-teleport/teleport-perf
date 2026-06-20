@@ -36,11 +36,12 @@ when running `bin/report` to include histograms.
 ## Configuration
 
 This repo is a Helm chart. All configuration is done through the Helm values
-described in `values.yaml`. However, the `bin/run*` scripts run Helm for you and take as
-input one file from each of the directories below:
+described in `values.yaml`. However, the `bin/run*` scripts run Helm for you and
+take as input one file from each of the directories below:
 
 - `cluster-config/` - Values files with the `tbot` branch of this chart's values
-- `test-config/` - Values files with the non-`tbot` branch of this chart's values
+- `test-config/` - Values files with the non-`tbot` branch of this chart's
+  values
 
 This lets you configure test parameters and k8s clusters to test against
 independently, so you can mix and match.
@@ -75,6 +76,10 @@ bin/generate-test-cases cluster-config/my-cluster.yaml
 Set environment variables before running the script to change which test cases
 are generated. For example, `REPLICAS_LIST` and `ITERATIONS` control the
 generated matrix.
+
+> [!WARNING] The test spins up 2 pods per replica (a test runner and a target).
+> Be careful not to exhaust your k8s IP space, especially on cloud clusters that
+> use vpc-native / non-overlay networking.
 
 ### Create "auto-complete" files for convenience
 

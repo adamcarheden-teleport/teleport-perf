@@ -3,31 +3,48 @@ set -euo pipefail
 declare -r MY_D="$(readlink -f "$(dirname "${BASH_SOURCE}")")"
 declare -r ROOT_D="$(readlink -f "${MY_D}/..")"
 declare -r OUT_D="${OUT_D:-${ROOT_D}/test-config}"
-declare -r ITERATIONS="${ITERATIONS:-30}"
-declare -r SMALL_BLOCK_SIZE="${SMALL_BLOCK_SIZE:-1K}"
-declare -r BIG_BLOCK_SIZE="${BIG_BLOCK_SIZE:-1M}"
-declare -r SMALL_DATA_NAME="${SMALL_DATA_NAME:-1mb}"
-declare -r BIG_DATA_NAME="${BIG_DATA_NAME:-10mb}"
-declare -r SMALL_DATA_BYTES="${SMALL_DATA_BYTES:-1048576}"
-declare -r BIG_DATA_BYTES="${BIG_DATA_BYTES:-10485760}"
-declare -r SMALL_BLOCK_NAME="${SMALL_BLOCK_NAME:-small-block}"
-declare -r BIG_BLOCK_NAME="${BIG_BLOCK_NAME:-big-block}"
-declare -r REPLICAS_LIST="${REPLICAS_LIST:-1 5 25}"
+declare -r ITERATIONS="${ITERATIONS:-20}"
+declare -r REPLICAS_LIST="${REPLICAS_LIST:-1 10 20}"
+declare -r STREAM_MODES="${STREAM_MODES:-txrx}"
+declare -r DATA_SIZES="${DATA_SIZES:-1mb:1048576}"
+declare -r BLOCK_SIZES="${BLOCK_SIZES:-1m:1M}"
+declare -r DATA_SOURCES="${DATA_SOURCES:-zero}"
 
 mkdir -p "${OUT_D}"
 
 block_bytes() {
-  case "${1}" in
-    1K) printf "%d\n" 1024 ;;
-    1M) printf "%d\n" 1048576 ;;
-    *) printf >&2 "Unsupported block size '%s'\n" "${1}"; exit 1 ;;
+  local size
+  size="$(printf "%s" "${1}" | tr '[:lower:]' '[:upper:]')"
+  local re='^([0-9]+)([KMG])$'
+  local n unit
+  [[ "${size}" =~ ${re} ]] || {
+    printf >&2 "Unsupported block size '%s'\n" "${1}"
+    exit 1
+  }
+  n="${BASH_REMATCH[1]}"
+  unit="${BASH_REMATCH[2]}"
+  case "${unit}" in
+    K) printf "%d\n" "$(( n * 1024 ))" ;;
+    M) printf "%d\n" "$(( n * 1024 * 1024 ))" ;;
+    G) printf "%d\n" "$(( n * 1024 * 1024 * 1024 ))" ;;
   esac
 }
 
 count_for() {
   local total_bytes="${1}"
   local block_size="${2}"
-  printf "%d\n" "$(( total_bytes / $(block_bytes "${block_size}") ))"
+  local bytes_per_block
+  bytes_per_block="$(block_bytes "${block_size}")"
+
+  if (( total_bytes < bytes_per_block )); then
+    return 1
+  fi
+
+  if (( total_bytes % bytes_per_block != 0 )); then
+    return 1
+  fi
+
+  printf "%d\n" "$(( total_bytes / bytes_per_block ))"
 }
 
 for replicas in ${REPLICAS_LIST}; do
@@ -47,21 +64,26 @@ type: "exec"
 command: "echo hello"
 EOF
 
-  for source in zero urandom; do
+  for source in ${DATA_SOURCES}; do
     infile="/dev/${source}"
-    for size_name in "${SMALL_DATA_NAME}" "${BIG_DATA_NAME}"; do
-      case "${size_name}" in
-        "${SMALL_DATA_NAME}") total_bytes="${SMALL_DATA_BYTES}" ;;
-        "${BIG_DATA_NAME}") total_bytes="${BIG_DATA_BYTES}" ;;
-      esac
-      for block_name in "${SMALL_BLOCK_NAME}" "${BIG_BLOCK_NAME}"; do
-        case "${block_name}" in
-          "${SMALL_BLOCK_NAME}") block_size="${SMALL_BLOCK_SIZE}" ;;
-          "${BIG_BLOCK_NAME}") block_size="${BIG_BLOCK_SIZE}" ;;
-        esac
-        count="$(count_for "${total_bytes}" "${block_size}")"
+    for size_spec in ${DATA_SIZES}; do
+      IFS=: read -r size_name total_bytes <<< "${size_spec}"
+      [[ -n "${size_name}" && -n "${total_bytes}" ]] || {
+        printf >&2 "Invalid data size spec '%s'\n" "${size_spec}"
+        exit 1
+      }
+      for block_spec in ${BLOCK_SIZES}; do
+        IFS=: read -r block_name block_size <<< "${block_spec}"
+        [[ -n "${block_name}" && -n "${block_size}" ]] || {
+          printf >&2 "Invalid block size spec '%s'\n" "${block_spec}"
+          exit 1
+        }
+        count="$(count_for "${total_bytes}" "${block_size}")" || continue
 
-        cat > "${OUT_D}/tx-${source}-${size_name}-${block_name}-r${replicas}.yaml" <<EOF
+        for stream_mode in ${STREAM_MODES}; do
+          case "${stream_mode}" in
+            tx)
+              cat > "${OUT_D}/tx-${source}-${size_name}-${block_name}-r${replicas}.yaml" <<EOF
 ---
 iterations: ${ITERATIONS}
 replicas: ${replicas}
@@ -72,16 +94,18 @@ input:
   block_size: ${block_size}
   file: "${infile}"
 EOF
-
-        cat > "${OUT_D}/rx-${source}-${size_name}-${block_name}-r${replicas}.yaml" <<EOF
+              ;;
+            rx)
+              cat > "${OUT_D}/rx-${source}-${size_name}-${block_name}-r${replicas}.yaml" <<EOF
 ---
 iterations: ${ITERATIONS}
 replicas: ${replicas}
 type: "exec"
 command: "dd if=${infile} bs=${block_size} count=${count} status=none"
 EOF
-
-        cat > "${OUT_D}/txrx-${source}-${size_name}-${block_name}-r${replicas}.yaml" <<EOF
+              ;;
+            txrx)
+              cat > "${OUT_D}/txrx-${source}-${size_name}-${block_name}-r${replicas}.yaml" <<EOF
 ---
 iterations: ${ITERATIONS}
 replicas: ${replicas}
@@ -92,6 +116,13 @@ input:
   block_size: ${block_size}
   file: "${infile}"
 EOF
+              ;;
+            *)
+              printf >&2 "Unsupported STREAM_MODES entry '%s'\n" "${stream_mode}"
+              exit 1
+              ;;
+          esac
+        done
       done
     done
   done

@@ -93,6 +93,9 @@ declare -r YQ_NAMESPACE='.tbot.services[0].destination.namespace'
 NAMESPACE="$(yq -e <"${CLUSTER_YAML}" "${YQ_NAMESPACE}")" \
   || die "Failed to get namespace. '${CLUSTER_YAML}' must have '${YQ_NAMESPACE}'. This must be name this benchmark will run in."
 declare -r CONTEXT="${TELEPORT_CLUSTER_NAME}-${K8S_CLUSTER_TELEPORT_NAME}"
+kubectl config get-contexts -o name | grep -Fxq "${CONTEXT}" \
+  || tsh --proxy="${TELEPORT_CLUSTER_NAME}" kube login "${K8S_CLUSTER_TELEPORT_NAME}" \
+  || die "Failed to log in to k8s cluster '${K8S_CLUSTER_TELEPORT_NAME}' through Teleport proxy '${TELEPORT_CLUSTER_NAME}'"
 declare -r YQ_REPLICAS='.replicas'
 REPLICAS="$(cat "${JOB_YAML}" | yq -e "${YQ_REPLICAS}")" \
   || REPLICAS="$(cat "${DEFAULTS_YAML}" | yq -e "${YQ_REPLICAS}")" \

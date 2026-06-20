@@ -26,4 +26,4 @@ mkdir -p "$(dirname "${STATUS_YAML}")" \
 started \
   && run_kubectl get "jobs/${K8S_JOB_NAME}" -o yaml > "${STATUS_YAML}"
 
-"${ROOT_D}/bin/report" "${RESULTS_TSV}"
+report_saved_results

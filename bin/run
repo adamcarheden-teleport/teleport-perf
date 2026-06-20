@@ -13,23 +13,28 @@ if debug; then
 fi
 
 if ! force; then 
+  if have_saved_results; then
+    msg "Saved results found, printing report..."
+    report_saved_results
+    exit "${EXIT_COMPLETE}"
+  fi
   debug && msg "checking if complete..."
   if complete; then
     msg "Job run and done, fetching results..."
     "${ROOT_D}/bin/get-results" "${@}"
-    exit 0
+    exit "${EXIT_COMPLETE}"
   fi
   (DEBUG=t run_kubectl get "job/${K8S_JOB_NAME}" || true)
   (DEBUG=t run_kubectl get pods -l "${K8S_RUNNER_LABELS}" || true)
   debug && msg "not complete, checking if running..."
   if running; then
     msg "Job still running"
-    exit 0
+    exit "${EXIT_RUNNING}"
   fi
   debug && msg "not running or complete, checking if failed..."
   if failed; then
     msg "Job failed. Run with envvar FORCE=true to run it again."
-    exit 1
+    exit "${EXIT_FAILED}"
   fi
 else
   debug && msg "Force enabled, skipped checking for existing runs"
@@ -81,3 +86,5 @@ msg "Installing chart"
   ${DEBUG_FLAG}
   ) \
   || die "Failed to helm"
+
+exit "${EXIT_STARTED}"

@@ -1,0 +1,51 @@
+#!/bin/bash
+set -euo pipefail
+declare -r MY_D="$(readlink -f "$(dirname "${BASH_SOURCE}")")"
+declare -r ROOT_D="$(readlink -f "${MY_D}/..")"
+declare -r CONFIG_D="${CONFIG_D:-${ROOT_D}/config}"
+declare -r POLL_SECS="${POLL_SECS:-10}"
+
+usage() {
+  printf >&2 "Usage: %s <cluster-config file>\n" "$(basename "${BASH_SOURCE}")"
+  exit 1
+}
+
+[[ "${#}" -eq 1 ]] || usage
+
+cluster_file="${1}"
+[[ -f "${cluster_file}" ]] || {
+  printf >&2 "Cluster config '%s' not found\n" "${1}"
+  exit 1
+}
+
+cluster_name="$(basename "${cluster_file}")"
+cluster_name="${cluster_name%.yaml}"
+
+for config_file in "${CONFIG_D}/${cluster_name}".*; do
+  [[ -e "${config_file}" ]] || continue
+  while true; do
+    set +e
+    "${ROOT_D}/bin/run" "${config_file#${ROOT_D}/}"
+    ret="${?}"
+    set -e
+
+    case "${ret}" in
+      0) # complete
+        break
+        ;;
+      1|2) # started this run or still in progress
+        sleep "${POLL_SECS}"
+        ;;
+      125) # failed
+        break
+        ;;
+      124) # die / unexpected hard failure
+        exit "${ret}"
+        ;;
+      *)
+        printf >&2 "Unknown exit code from bin/run for '%s': %s\n" "${config_file#${ROOT_D}/}" "${ret}"
+        exit "${ret}"
+        ;;
+    esac
+  done
+done

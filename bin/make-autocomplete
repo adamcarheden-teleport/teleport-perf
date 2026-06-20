@@ -1,0 +1,28 @@
+#!/bin/bash
+set -euo pipefail
+declare -r MY_D="$(readlink -f "$(dirname "${BASH_SOURCE}")")"
+declare -r ROOT_D="$(readlink -f "${MY_D}/..")"
+declare -r TEST_D="${ROOT_D}/test-config"
+declare -r CONFIG_D="${ROOT_D}/config"
+
+usage() {
+  printf >&2 "Usage: %s <cluster-config file>\n" "$(basename "${BASH_SOURCE}")"
+  exit 1
+}
+
+[[ "${#}" -eq 1 ]] || usage
+
+cluster_file="${1}"
+[[ -f "${cluster_file}" ]] || {
+  printf >&2 "Cluster config '%s' not found\n" "${1}"
+  exit 1
+}
+
+mkdir -p "${CONFIG_D}"
+
+cluster_name="$(basename "${cluster_file}")"
+cluster_name="${cluster_name%.yaml}"
+for test_file in "${TEST_D}"/*.yaml; do
+  test_name="$(basename "${test_file}" .yaml)"
+  touch "${CONFIG_D}/${cluster_name}.${test_name}"
+done

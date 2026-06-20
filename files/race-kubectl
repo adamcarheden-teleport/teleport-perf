@@ -75,18 +75,22 @@ run_test() {
   local CONFIG_FLAG="${1:-}"
   local before="$(date +%s%N)"
   local read_cmd='printf ""'
-  local kubectl_args=(exec -i "${TARGET_POD}" -- ${CMD})
+  local remote_cmd=(sh -c "${CMD} && cat >/dev/null")
+  local kubectl_args=(exec -i "${TARGET_POD}" -- "${remote_cmd[@]}")
 
   if [[ "${TYPE}" == "ls" ]]; then
     kubectl_args=(get pods)
   fi
 
-  [[ "${TX_BLOCK_SIZE}" -gt 0 ]] \
+  [[ "${TYPE}" == "exec" && "${TX_BLOCK_SIZE}" -gt 0 ]] \
     && read_cmd="dd if=${TX_INFILE} bs=${TX_BLOCK_SIZE} count=${TX_COUNT}"
+  
   (
-    set -x; \
+    set -x;
+    set +eo pipefail
     ${read_cmd} \
-    | kubectl >&2 ${CONFIG_FLAG} "${kubectl_args[@]}" \
+      | kubectl >&2 ${CONFIG_FLAG} "${kubectl_args[@]}" \
+      | cat >/dev/null
   )
   local ret="${?}"
   local after="$(date +%s%N)"

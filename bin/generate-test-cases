@@ -1,0 +1,98 @@
+#!/bin/bash
+set -euo pipefail
+declare -r MY_D="$(readlink -f "$(dirname "${BASH_SOURCE}")")"
+declare -r ROOT_D="$(readlink -f "${MY_D}/..")"
+declare -r OUT_D="${OUT_D:-${ROOT_D}/test-config}"
+declare -r ITERATIONS="${ITERATIONS:-30}"
+declare -r SMALL_BLOCK_SIZE="${SMALL_BLOCK_SIZE:-1K}"
+declare -r BIG_BLOCK_SIZE="${BIG_BLOCK_SIZE:-1M}"
+declare -r SMALL_DATA_NAME="${SMALL_DATA_NAME:-1mb}"
+declare -r BIG_DATA_NAME="${BIG_DATA_NAME:-10mb}"
+declare -r SMALL_DATA_BYTES="${SMALL_DATA_BYTES:-1048576}"
+declare -r BIG_DATA_BYTES="${BIG_DATA_BYTES:-10485760}"
+declare -r SMALL_BLOCK_NAME="${SMALL_BLOCK_NAME:-small-block}"
+declare -r BIG_BLOCK_NAME="${BIG_BLOCK_NAME:-big-block}"
+declare -r REPLICAS_LIST="${REPLICAS_LIST:-1 5 25}"
+
+mkdir -p "${OUT_D}"
+
+block_bytes() {
+  case "${1}" in
+    1K) printf "%d\n" 1024 ;;
+    1M) printf "%d\n" 1048576 ;;
+    *) printf >&2 "Unsupported block size '%s'\n" "${1}"; exit 1 ;;
+  esac
+}
+
+count_for() {
+  local total_bytes="${1}"
+  local block_size="${2}"
+  printf "%d\n" "$(( total_bytes / $(block_bytes "${block_size}") ))"
+}
+
+for replicas in ${REPLICAS_LIST}; do
+  cat > "${OUT_D}/ls-r${replicas}.yaml" <<EOF
+---
+iterations: ${ITERATIONS}
+replicas: ${replicas}
+type: "ls"
+command: ""
+EOF
+
+  cat > "${OUT_D}/exec-latency-r${replicas}.yaml" <<EOF
+---
+iterations: ${ITERATIONS}
+replicas: ${replicas}
+type: "exec"
+command: "echo hello"
+EOF
+
+  for source in zero urandom; do
+    infile="/dev/${source}"
+    for size_name in "${SMALL_DATA_NAME}" "${BIG_DATA_NAME}"; do
+      case "${size_name}" in
+        "${SMALL_DATA_NAME}") total_bytes="${SMALL_DATA_BYTES}" ;;
+        "${BIG_DATA_NAME}") total_bytes="${BIG_DATA_BYTES}" ;;
+      esac
+      for block_name in "${SMALL_BLOCK_NAME}" "${BIG_BLOCK_NAME}"; do
+        case "${block_name}" in
+          "${SMALL_BLOCK_NAME}") block_size="${SMALL_BLOCK_SIZE}" ;;
+          "${BIG_BLOCK_NAME}") block_size="${BIG_BLOCK_SIZE}" ;;
+        esac
+        count="$(count_for "${total_bytes}" "${block_size}")"
+
+        cat > "${OUT_D}/tx-${source}-${size_name}-${block_name}-r${replicas}.yaml" <<EOF
+---
+iterations: ${ITERATIONS}
+replicas: ${replicas}
+type: "exec"
+command: "true"
+input:
+  count: ${count}
+  block_size: ${block_size}
+  file: "${infile}"
+EOF
+
+        cat > "${OUT_D}/rx-${source}-${size_name}-${block_name}-r${replicas}.yaml" <<EOF
+---
+iterations: ${ITERATIONS}
+replicas: ${replicas}
+type: "exec"
+command: "dd if=${infile} bs=${block_size} count=${count} status=none"
+EOF
+
+        cat > "${OUT_D}/txrx-${source}-${size_name}-${block_name}-r${replicas}.yaml" <<EOF
+---
+iterations: ${ITERATIONS}
+replicas: ${replicas}
+type: "exec"
+command: "cat"
+input:
+  count: ${count}
+  block_size: ${block_size}
+  file: "${infile}"
+EOF
+      done
+    done
+  done
+done

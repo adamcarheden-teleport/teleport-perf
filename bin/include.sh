@@ -1,5 +1,10 @@
 #!/bin/bash
 set -euo pipefail
+declare -r EXIT_COMPLETE=0
+declare -r EXIT_STARTED=1
+declare -r EXIT_RUNNING=2
+declare -r EXIT_FAILED=125
+declare -r EXIT_DIE=124
 
 ### Utilit functions #########################################################
 msg() {
@@ -7,7 +12,7 @@ msg() {
 }
 die() {
   msg "ERROR: ${*}"
-  exit 1
+  exit "${EXIT_DIE}"
 }
 ###############################################################################
 
@@ -25,7 +30,7 @@ Usage:
 EOT
 )" \
   "ERROR: ${*}"
-  exit 1
+  exit "${EXIT_DIE}"
 }
 declare CLUSTER="${CLUSTER:-}"
 declare JOB_NAME="${JOB_NAME:-}"
@@ -130,4 +135,13 @@ failed() {
 }
 running() {
   started && ! complete && ! failed
+}
+
+have_saved_results() {
+  [[ -f "${RESULTS_TSV}" ]]
+}
+
+report_saved_results() {
+  have_saved_results || die "Saved results '${RESULTS_TSV}' not found"
+  "${ROOT_D}/bin/report" "${RESULTS_TSV}"
 }

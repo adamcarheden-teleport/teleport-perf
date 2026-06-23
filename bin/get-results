@@ -5,8 +5,23 @@ declare -r MY_D="$(readlink -f "$(dirname "${BASH_SOURCE}")")"
 
 mkdir -p "$(dirname "${RESULTS_TSV}")" \
   || die "Failed to make dir for '${RESULTS_TSV}'"
+if failed; then
+  mkdir -p "$(dirname "${STATUS_YAML}")" \
+    || die "Failed to make dir for '${STATUS_YAML}'"
+  started \
+    && run_kubectl get "jobs/${K8S_JOB_NAME}" -o yaml > "${STATUS_YAML}"
+  run_kubectl describe "jobs/${K8S_JOB_NAME}" > "${JOB_RESULTS_D}/${JOB_NAME}.describe.txt" || true
+  run_kubectl get pods -l "${K8S_RUNNER_LABELS}" -o yaml > "${JOB_RESULTS_D}/${JOB_NAME}.pods.yaml" || true
+  for pod in $(run_kubectl get pods -l "${K8S_RUNNER_LABELS}" -o name 2>/dev/null); do
+    pod_name="${pod#pod/}"
+    run_kubectl logs "${pod}" > "${JOB_RESULTS_D}/${pod_name}.log" || true
+    run_kubectl describe "${pod}" > "${JOB_RESULTS_D}/${pod_name}.describe.txt" || true
+  done
+  exit "${EXIT_FAILED}"
+fi
+
 if force || [[ ! -f "${RESULTS_TSV}" ]]; then
-  complete || die "Job isn't complete yet (or hasn't been started)"
+  complete || die "Job isn't complete yet, failed, or hasn't been started"
   (DEBUG=t; run_kubectl \
     exec "${RELEASE}-target-0" -- head -n1 "/results/results.tsv.0") \
     > "${RESULTS_TSV}"

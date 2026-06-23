@@ -50,7 +50,7 @@ for config_file in "${CONFIG_D}/${cluster_name}".*; do
         ;;
       125)
         # failed
-        if [[ -n "${STOP_ON_FAILURE}" && "${STOP_ON_FAILURE^^}" != "FALSE" ]]; then
+        if [[ -n "${STOP_ON_FAILURE}" && "$(echo "${STOP_ON_FAILURE}" | tr 'a-z' 'A-Z')" != "FALSE" ]]; then
           echo >&2 "test case '${config_file}' failed and STOP_ON_FAILURE set, exiting..."
           exit "${ret}"
         fi
@@ -58,8 +58,13 @@ for config_file in "${CONFIG_D}/${cluster_name}".*; do
         break
         ;;
       124)
-        # die / unexpected hard failure
-        exit "${ret}"
+        # die / hard failure
+        if [[ -n "${STOP_ON_FAILURE}" && "$(echo "${STOP_ON_FAILURE}" | tr 'a-z' 'A-Z')" != "FALSE" ]]; then
+          echo >&2 "test case '${config_file}' hit hard failure and STOP_ON_FAILURE set, exiting..."
+          exit "${ret}"
+        fi
+        cleanup "${config_file}"
+        break
         ;;
       *)
         printf >&2 "Unknown exit code from bin/run for '%s': %s\n" "${config_file#${ROOT_D}/}" "${ret}"

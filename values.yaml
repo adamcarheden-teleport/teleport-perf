@@ -48,4 +48,6 @@ max_wait: "5m"
 # How many times to retry failed jobs
 backoff_limit: 3
 
+debug_runner_pod: false
+
 ##############################################################################

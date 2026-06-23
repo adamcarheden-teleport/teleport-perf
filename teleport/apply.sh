@@ -22,8 +22,10 @@ die() {
 
 [[ -n "${K8S_CLUSTER_KUBECTL_CONTEXT}" ]] \
   || die "Please supply a kubectl context for the k8s cluster the bot will run on as either the first argument or the K8S_CLUSTER_KUBECTL_CONTEXT envvar (got '${K8S_CLUSTER_KUBECTL_CONTEXT}')"
-kubectl config get-contexts -o name \
-  | grep -Fxq "${K8S_CLUSTER_KUBECTL_CONTEXT}" \
+declare -a KUBE_CONTEXTS=( $(kubectl config get-contexts -o name) )
+[[ -n "${DEBUG}" && "$(echo "${DEBUG}" | tr 'a-z' 'A-Z')" != "false" ]] \
+  && printf >&2 'kubectl contexts:\n%s\n' "${KUBE_CONTEXTS[@]}"
+printf '%s\n' "${KUBE_CONTEXTS[@]}" | grep -Fxq "${K8S_CLUSTER_KUBECTL_CONTEXT}" \
   || die "'${K8S_CLUSTER_KUBECTL_CONTEXT}' is not configured as a kubectl context"
 
 OIDC_ISSUER="$(

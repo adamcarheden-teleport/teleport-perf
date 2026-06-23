@@ -50,6 +50,10 @@ spec:
           value: {{ include "tperf.target-name" . }}
         - name: OUT
           value: {{ printf "%s/results.tsv" (include "tperf.results-dir" .) }}
+        {{- if .Values.debug_runner_pod }}
+        - name: DEBUG
+          value: "true"
+        {{- end }}
         volumeMounts:
         - name: tbot
           mountPath: /opt/machine-id

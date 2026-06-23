@@ -1,13 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Uncomment to debug pod before run
-#trap 'exit 0' TERM INT
-#while true; do
-#  sleep 10 &
-#  wait $!
-#  echo 'Waiting for you to debugtest-runner'
-#done
+declare -r DEBUG="${DEBUG:-}"
+debug() {
+  [[ -n "${DEBUG}" && "$(echo "${DEBUG}" | tr 'a-z' 'A-Z')" != "FALSE" ]]
+}
+on_fail() {
+  ret="$?"
+  printf >&2 "race-kubectl failed with exit %s\n" "${ret}"
+  while true; do
+    sleep 10 &
+    wait $!
+    echo 'Waiting for you to debugtest-runner'
+  done
+}
+if debug; then
+  set -Ex
+  trap on_fail ERR
+fi
 
 # Mark start in the logs
 date >&2
@@ -18,6 +28,7 @@ msg() {
 
 die() {
   msg "ERROR: ${*}"
+  debug && on_fail
   exit 1
 }
 
@@ -58,6 +69,32 @@ declare -r TARGET_PREFIX="${TARGET_PREFIX:-}"
 [[ -n "${TARGET_PREFIX}" ]] \
   || die "TARGET_PREFIX not set. Set it to the name of the remote StatefulSet we're running on."
 declare -r TARGET_POD="${TARGET_PREFIX}-${ORDINAL}"
+
+wait_for_pod() {
+  local pod="${1}"
+  local max="${2:-5000}"
+  [[ -z "${pod}" ]] && {
+    echo >&2 "Pod empty in wait_for_pod"
+    exit 1;
+  }
+  until (set -x; kubectl get "pod/${pod}") || [[ "${max}" -le 0 ]]; do
+    printf >&2 "Waiting for target pod '%s' to exist...%d\n" "${pod}" "${max}"
+    sleep 1
+    max="$(( max - 1 ))"
+  done
+}
+export -f wait_for_pod # Because timeout won't work with functions
+# We use if+case because we've set -e -- timeout failure would cause exit
+if timeout "${MAX_READY_WAIT}" bash -c "wait_for_pod '${TARGET_POD}'"; then
+  msg "Pod '${TARGET_POD}' exists, waiting for it to be ready..."
+else
+  ret="${?}"
+  case "${ret}" in
+    124) die "Timed out waiting for pod '${TARGET_POD}' to exist" ;;
+    0) die "This should be unreachable code" ;;
+    *) die "Unknown failure waiting for target pod '${TARGET_POD}' to exist." ;;
+  esac
+fi
 
 declare -r OUT_POD_NO_TP="${OUT_POD_NO_TP:-/dev/shm/${TARGET_POD}.no-teleport.yaml}"
 kubectl get "pod/${TARGET_POD}" -o yaml \
@@ -103,6 +140,8 @@ kubectl wait \
   --timeout="${MAX_READY_WAIT}" \
   || die "Target pod '${TARGET_POD}' was not ready after '${MAX_READY_WAIT}'"
 msg "Seeing permission errors about 'wait' above? Add perms, but things are still working. kubectl falls back to polling if it doesn't have wait perms."
+
+sleep 1 # Because sometimes it takes a sec even after the pod is "ready"
 
 printf "#%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
   "task" \

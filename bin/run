@@ -4,13 +4,16 @@ declare -r MY_D="$(readlink -f "$(dirname "${BASH_SOURCE}")")"
 . "${MY_D}/include.sh"
 
 declare CMD="upgrade --install"
+declare -r DEBUG_RUNNER_POD="${DEBUG_RUNNER_POD:-}"
 
-DEBUG_FLAG=""
+DEBUG_FLAGS=""
 OVERWRITE="${OVERWRITE:-}"
 if debug; then
   CMD="template"
-  DEBUG_FLAG="--debug"
+  DEBUG_FLAGS="--debug"
 fi
+[[ -n "${DEBUG_RUNNER_POD}" && "$(echo "${DEBUG_RUNNER_POD}" | tr 'a-z' 'A-Z')" != "FALSE" ]] \
+  && DEBUG_FLAGS="${DEBUG_FLAGS} --set debug_runner_pod=true"
 
 if ! force; then 
   if have_saved_results; then
@@ -33,7 +36,8 @@ if ! force; then
   fi
   debug && msg "not running or complete, checking if failed..."
   if failed; then
-    msg "Job failed. Run with envvar FORCE=true to run it again."
+    msg "Job failed. Run with envvar FORCE=true to run it again. Saving status..."
+    "${ROOT_D}/bin/get-results" "${@}"
     exit "${EXIT_FAILED}"
   fi
 else
@@ -55,12 +59,14 @@ K8S_SA="${RELEASE}" \
 if [[ -e "${RESULTS_TSV}" || -e "${STATUS_YAML}" ]]; then
   msg "Archiving old results"
   arc_ts="$(date +%s)"
-  [[ -e "${RESULTS_TSV}" ]] \
-    && (set -x; mv "${RESULTS_TSV}" "${RESULTS_TSV}.archived_at_${arc_ts}") \
-    || die "Failed to archive old results"
-  [[ -e "${STATUS_YAML}" ]] \
-    && (set -x; mv "${STATUS_YAML}" "${STATUS_YAML}.archived_at_${arc_ts}") \
-    || die "Failed to archive old results"
+  if [[ -e "${RESULTS_TSV}" ]]; then
+    (set -x; mv "${RESULTS_TSV}" "${RESULTS_TSV}.archived_at_${arc_ts}") \
+      || die "Failed to archive old results"
+  fi
+  if [[ -e "${STATUS_YAML}" ]]; then
+    (set -x; mv "${STATUS_YAML}" "${STATUS_YAML}.archived_at_${arc_ts}") \
+      || die "Failed to archive old results"
+  fi
 fi
 
 if started; then
@@ -83,7 +89,7 @@ msg "Installing chart"
   --set tbot.token="${TOKEN}" \
   -f "${JOB_YAML}" \
   -f "${CLUSTER_YAML}" \
-  ${DEBUG_FLAG}
+  ${DEBUG_FLAGS} \
   ) \
   || die "Failed to helm"
 

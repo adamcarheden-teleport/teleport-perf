@@ -1,0 +1,31 @@
+#!/bin/bash
+# Renames failed runs, causing the next run to retry rather than report failure.
+set -euo pipefail
+declare -r MY_D="$(readlink -f "$(dirname "${BASH_SOURCE}")")"
+declare -r ROOT_D="$(readlink -f "${MY_D}/..")"
+declare -r RESULTS_D="${ROOT_D}/results"
+
+arc_ts="$(date +%s)"
+found=0
+
+for status_yaml in "${RESULTS_D}"/*/*.status.yaml; do
+  [[ -e "${status_yaml}" ]] || continue
+  rg -q 'type: Failed' "${status_yaml}" || continue
+
+  result_dir="$(dirname "${status_yaml}")"
+  for path in "${result_dir}"/*; do
+    [[ -e "${path}" ]] || continue
+    [[ "${path}" == *.archived_at_* ]] && continue
+    found=1
+    (set -x; mv "${path}" "${path}.archived_at_${arc_ts}") \
+      || {
+        printf >&2 "Failed to archive '%s'\n" "${path}"
+        exit 1
+      }
+  done
+done
+
+[[ "${found}" -eq 1 ]] || {
+  printf >&2 "No failed result files found to archive in '%s'\n" "${RESULTS_D}"
+  exit 1
+}

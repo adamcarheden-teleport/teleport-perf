@@ -3,7 +3,19 @@ set -euo pipefail
 declare -r MY_D="$(readlink -f "$(dirname "${BASH_SOURCE}")")"
 . "${MY_D}/include.sh"
 
+declare -r HELM_WAIT="${HELM_WAIT:-5m}"
+
+if ! helm status "${RELEASE}" \
+  --kube-context "${CONTEXT}" \
+  --namespace "${NAMESPACE}" >/dev/null 2>&1; then
+  msg "Release not found, nothing to clean up"
+  exit 0
+fi
+
 msg "Uninstalling chart"
 helm uninstall "${RELEASE}" \
   --kube-context "${CONTEXT}" \
-  --namespace "${NAMESPACE}"
+  --namespace "${NAMESPACE}" \
+  --wait --timeout "${HELM_WAIT}" \
+  --ignore-not-found \
+  --cascade foreground \

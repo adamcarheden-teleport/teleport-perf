@@ -1,0 +1,17 @@
+.git/
+.agents/
+.codex/
+.DS_Store
+
+README.md
+bin/
+cluster-config/
+config/
+results/
+results*.tgz
+results*.tar.gz
+teleport/
+test-config/
+
+*.pyc
+__pycache__/

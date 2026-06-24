@@ -1,0 +1,163 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+declare -r DEBUG="${DEBUG:-}"
+debug() {
+  [[ -n "${DEBUG}" && "$(echo "${DEBUG}" | tr 'a-z' 'A-Z')" != "FALSE" ]]
+}
+
+msg() {
+  printf >&2 "%s\n" "${*}"
+}
+
+die() {
+  msg "ERROR: ${*}"
+  exit 1
+}
+
+declare -r ROOT_D="$(readlink -f "$(dirname "${BASH_SOURCE}")/..")"
+declare -r ARG1="${1:-local}"
+declare CONFIG_TEST_NAME=""
+if [[ "${ARG1}" == config/* ]]; then
+  declare -r CONFIG_FILE="${ROOT_D}/${ARG1}"
+  [[ -r "${CONFIG_FILE}" ]] \
+    || die "Config file '${CONFIG_FILE}' not found"
+  # shellcheck source=/dev/null
+  . "${CONFIG_FILE}"
+  CONFIG_TEST_NAME="$(basename "${ARG1}")"
+  [[ "${CONFIG_TEST_NAME}" == local.* ]] \
+    || die "Config file name '${CONFIG_TEST_NAME}' must start with 'local.'"
+fi
+
+declare -r FORCE="${FORCE:-}"
+declare -r NAMESPACE="${NAMESPACE:-teleport-performance}"
+declare -r POD="${POD:-tperf-target}"
+declare -r IMAGE="${IMAGE:-busybox:latest}"
+declare -r TP_CLUSTER="${TP_CLUSTER:-teleport.example.com}"
+declare -r CONTEXT_NO_TP="${CONTEXT_NO_TP:-my-teleport-cluster}"
+declare -r CONTEXT_TP="${CONTEXT_TP:-${TP_CLUSTER}-${CONTEXT_NO_TP}}"
+declare -r ITERATIONS="${ITERATIONS:-30}"
+declare -r CMD="${CMD:-echo hello}"
+declare -r TX_COUNT="${TX_COUNT:-0}"
+declare -r TX_BLOCK_SIZE="${TX_BLOCK_SIZE:-0}"
+declare -r TX_INFILE="${TX_INFILE:-/dev/zero}"
+declare -r MAX_READY_WAIT="${MAX_READY_WAIT:-5m}"
+
+declare -r RESULTS_D="${ROOT_D}/results"
+if [[ -n "${CONFIG_TEST_NAME}" ]]; then
+  declare -r FULL_TEST_NAME="${CONFIG_TEST_NAME}"
+else
+  declare -r FULL_TEST_NAME="local.${CONTEXT_NO_TP}.${ARG1}-x${ITERATIONS}"
+fi
+declare -r TEST_D="${RESULTS_D}/${FULL_TEST_NAME}"
+declare -r RESULTS_TSV="${TEST_D}/${FULL_TEST_NAME}.tsv"
+
+kubectl_tp() {
+  kubectl --context "${CONTEXT_TP}" --namespace "${NAMESPACE}" "$@"
+}
+
+kubectl_no_tp() {
+  kubectl --context "${CONTEXT_NO_TP}" --namespace "${NAMESPACE}" "$@"
+}
+
+mkdir -p "${TEST_D}" || die "Failed to create test directory '${TEST_D}'"
+[[ -z "${FORCE}" && -e "${RESULTS_TSV}" ]] \
+  && die "Results file '${RESULTS_TSV}' already exists. Use FORCE=1 to overwrite."
+
+msg "Applying pod/${POD} in namespace ${NAMESPACE}"
+if ! kubectl_no_tp apply -f - <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ${POD}
+  namespace: ${NAMESPACE}
+  labels:
+    app.kubernetes.io/name: tperf-local
+spec:
+  restartPolicy: Never
+  containers:
+  - name: target
+    image: ${IMAGE}
+    command:
+    - /bin/sh
+    - -c
+    - |
+      trap 'exit 0' TERM INT
+      while true; do
+        sleep 10 &
+        wait \$!
+      done
+EOF
+then
+  die "Failed to apply pod/${POD} in namespace ${NAMESPACE}"
+fi
+
+kubectl_no_tp wait "pod/${POD}" \
+  --for=condition=ready \
+  --timeout="${MAX_READY_WAIT}" \
+  || die "Target pod '${POD}' was not ready after '${MAX_READY_WAIT}'"
+
+kubectl_tp get "pod/${POD}" >/dev/null \
+  || die "Failed to query pod/${POD} through Teleport context '${CONTEXT_TP}'"
+
+run_test() {
+  local context="${1:-}"
+  [[ -n "${context}" ]] || die "run_test requires a kubectl context"
+
+  local read_cmd='printf ""'
+  local remote_cmd=(sh -c "${CMD} && cat >/dev/null")
+  local kubectl_args=(exec -i "${POD}" -- "${remote_cmd[@]}")
+
+  [[ "${TX_COUNT}" -gt 0 && "${TX_BLOCK_SIZE}" != "0" ]] \
+    && read_cmd="dd if=${TX_INFILE} bs=${TX_BLOCK_SIZE} count=${TX_COUNT}"
+
+  local before
+  before="$(date +%s%N)"
+
+  (
+    set +e
+    set -o pipefail
+    set -x
+    ${read_cmd} \
+      | kubectl --context "${context}" --namespace "${NAMESPACE}" "${kubectl_args[@]}" \
+      | cat >/dev/null
+  )
+  local ret="${?}"
+
+  local after
+  after="$(date +%s%N)"
+  printf "%d\t%d\t%d\n" "${before}" "${after}" "${ret}"
+}
+
+printf "#%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
+  "task" \
+  iter \
+  "start_no_tp" \
+  "end_no_tp" \
+  "exit_code_no_tp" \
+  "start_tp" \
+  "end_tp" \
+  "exit_code_tp" \
+  | tee "${RESULTS_TSV}" \
+  || die "Failed to print header"
+
+for i in $(seq 1 "${ITERATIONS}"); do
+  msg "Running iteration ${i} of ${ITERATIONS}"
+
+  x_results="$(run_test "${CONTEXT_NO_TP}")" \
+    || die "Failed to run iteration '${i}' without Teleport"
+  IFS=$'\t' read -r x_start x_end x_ret <<< "${x_results}"
+
+  t_results="$(run_test "${CONTEXT_TP}")" \
+    || die "Failed to run iteration '${i}' with Teleport"
+  IFS=$'\t' read -r t_start t_end t_ret <<< "${t_results}"
+
+  printf "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n" \
+    0 "${i}" \
+    "${x_start}" "${x_end}" "${x_ret}" \
+    "${t_start}" "${t_end}" "${t_ret}" \
+    | tee -a "${RESULTS_TSV}" \
+    || die "Failed to print iteration '${i}'"
+done
+
+msg "Benchmark run complete, output at '${RESULTS_TSV}'"

@@ -7,7 +7,7 @@
 {{- end }}
 
 {{- define "tperf.sa-name" -}}
-{{- printf "%s" .Release.Name -}}
+{{- required "Please set tbot.serviceAccount.name to the shared ServiceAccount name for this chart" .Values.tbot.serviceAccount.name -}}
 {{- end }}
 
 {{- define "tperf.scripts" -}}
@@ -21,7 +21,7 @@
 # We override this sub-chart template to set our service acount name so the
 # user doesn't have to make strings match
 {{- define "tbot.serviceAccountName" -}}
-{{- include "tperf.sa-name" . -}}
+{{- required "Please set serviceAccount.name for the tbot chart" .Values.serviceAccount.name -}}
 {{- end }}
 
 {{- define "tperf.results-dir" -}}
@@ -30,7 +30,7 @@
 
 
 {{- define "tperf.common-labels" -}}
-app.kubernetes.io/name: tperf
+app.kubernetes.io/name: {{ .Values.app_name | default "tperf" }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 

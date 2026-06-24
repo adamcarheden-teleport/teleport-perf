@@ -8,11 +8,8 @@ declare -r RESULTS_D="${ROOT_D}/results"
 arc_ts="$(date +%s)"
 found=0
 
-for status_yaml in "${RESULTS_D}"/*/*.status.yaml; do
-  [[ -e "${status_yaml}" ]] || continue
-  rg -q 'type: Failed' "${status_yaml}" || continue
-
-  result_dir="$(dirname "${status_yaml}")"
+for failed_test in $(${MY_D}/list-tests Failed | cut -f1); do
+  result_dir="${RESULTS_D}/${failed_test}"
   for path in "${result_dir}"/*; do
     [[ -e "${path}" ]] || continue
     [[ "${path}" == *.archived_at_* ]] && continue

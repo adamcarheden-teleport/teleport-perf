@@ -3,7 +3,7 @@ set -euo pipefail
 declare -r MY_D="$(readlink -f "$(dirname "${BASH_SOURCE}")")"
 declare -r ROOT_D="$(readlink -f "${MY_D}/..")"
 declare -r CONFIG_D="${CONFIG_D:-${ROOT_D}/config}"
-declare -r POLL_SECS="${POLL_SECS:-10}"
+declare -r POLL_SECS="${POLL_SECS:-15}"
 declare -r STOP_ON_FAILURE="${STOP_ON_FAILURE:-}"
 
 usage() {
@@ -44,7 +44,7 @@ for config_file in "${CONFIG_D}/${cluster_name}".*; do
         cleanup "${config_file}"
         break
         ;;
-      1|2)
+      1|2|3)
         # started this run or still in progress
         sleep "${POLL_SECS}"
         ;;

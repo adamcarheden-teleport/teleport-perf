@@ -27,7 +27,9 @@ if ! force; then
     "${ROOT_D}/bin/get-results" "${@}"
     exit "${EXIT_COMPLETE}"
   fi
+  echo >&2 "### Ignore the error below if no jobs are found"
   (DEBUG=t run_kubectl get "job/${K8S_JOB_NAME}" || true)
+  echo >&2 "### Ignore the error below if no pods are found"
   (DEBUG=t run_kubectl get pods -l "${K8S_RUNNER_LABELS}" || true)
   debug && msg "not complete, checking if running..."
   if running; then
@@ -48,11 +50,22 @@ fi
 export TOKEN
 export DEBUG
 export OVERWRITE
-BOT="${NAME}-bot" \
-ROLE="${NAME}" \
+
+msg "Ensuring shared service account"
+cat <<EOF | run_kubectl apply -f - \
+  || die "Failed to apply service account '${SERVICE_ACCOUNT}'"
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ${SERVICE_ACCOUNT}
+  namespace: ${NAMESPACE}
+EOF
+
+BOT="${CLUSTER}-${PROJECT_NAME}-bot" \
+ROLE="${CLUSTER}-${PROJECT_NAME}" \
 K8S_GROUP="${GROUP}" \
 K8S_NAMESPACE="${NAMESPACE}" \
-K8S_SA="${RELEASE}" \
+K8S_SA="${SERVICE_ACCOUNT}" \
 "${ROOT_D}/teleport/apply.sh" "${CONTEXT}" \
 || die "Failed to apply teleport objects"
 
@@ -69,11 +82,16 @@ if [[ -e "${RESULTS_TSV}" || -e "${STATUS_YAML}" ]]; then
   fi
 fi
 
-if started; then
-  # This let's us rerun without reinstalling the helm chart
-  msg "Deleting old jobs"
-  run_kubectl delete "job/${K8S_JOB_NAME}" --ignore-not-found \
-    || die "Failed to clean up old jobs"
+if force; then
+  if started; then
+    # FORCE explicitly opts into deleting any existing Job before re-running.
+    msg "Deleting old jobs"
+    run_kubectl delete "job/${K8S_JOB_NAME}" --ignore-not-found \
+      || die "Failed to clean up old jobs"
+  fi
+elif started; then
+  msg "Job exists but is neither complete, running, nor failed. Refusing to delete without FORCE=true."
+  exit "${EXIT_UNKNOWN}"
 fi
 
 msg "Ensuring helm deps"
@@ -85,8 +103,14 @@ msg "Installing chart"
   "${RELEASE}" "${ROOT_D}" \
   --kube-context "${CONTEXT}" \
   --namespace "${NAMESPACE}" \
+  --set app_name="${PROJECT_NAME}" \
   --set group="${GROUP}" \
+  --set tbot.serviceAccount.create=false \
+  --set tbot.serviceAccount.name="${SERVICE_ACCOUNT}" \
   --set tbot.token="${TOKEN}" \
+  --set tbot.services[0].destination.name="${RELEASE}-tbot" \
+  --set tbot.services[0].destination.type="kubernetes_secret" \
+  --set tbot.services[0].destination.namespace="${NAMESPACE}" \
   -f "${JOB_YAML}" \
   -f "${CLUSTER_YAML}" \
   ${DEBUG_FLAGS} \

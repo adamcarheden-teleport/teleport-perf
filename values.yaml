@@ -22,6 +22,8 @@ tbot:
 ### Test Configuration
 # Copy the ones you want to modify to your values file
 
+app_name: "tperf"
+
 # Number of tests run by each job
 iterations: 1
 # Test type: 'exec' runs command in the target pod, 'ls' runs `kubectl get pods`

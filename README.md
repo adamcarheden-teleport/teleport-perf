@@ -54,6 +54,20 @@ Create cluster files in `cluster-config/<cluster>.yaml` and test files in
 and
 [`test-config/example-ls.yaml`](/Users/adamcarheden/src/tperf/test-config/example-ls.yaml:1).
 
+The run scripts inject a few runtime values instead of reading them from the
+cluster config:
+
+- `TPERF_NAMESPACE` defaults to `teleport-performance`
+- `TPERF_SERVICE_ACCOUNT` defaults to `tperf`
+- `TPERF_TOKEN` defaults to `<cluster>-tperf`
+
+The Teleport bot name, role name, and Kubernetes group are also stabilized per
+cluster, so repeated test cases on the same cluster reuse the same Teleport
+identity rather than creating one per benchmark release. `bin/run` creates the
+shared Kubernetes `ServiceAccount` with `kubectl apply`, tells the `tbot`
+subchart not to create it, and injects a unique `tbot` destination secret name
+per benchmark release.
+
 ### Run one test
 
 ```

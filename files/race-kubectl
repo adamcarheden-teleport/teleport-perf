@@ -41,8 +41,10 @@ declare -r TX_COUNT="${TX_COUNT:-0}"
 declare -r TX_BLOCK_SIZE="${TX_BLOCK_SIZE:-0}"
 declare -r TX_INFILE="${TX_INFILE:-/dev/zero}"
 declare -r MAX_READY_WAIT="${MAX_READY_WAIT:-5m}"
+declare -r MAX_TBOT_WAIT_SEC="${MAX_TBOT_WAIT_SEC:-300}"
 
 declare -r TELEPORT_KUBECONFIG="${TELEPORT_KUBECONFIG:-/opt/machine-id/kubeconfig.yaml}"
+declare -r TBOT_WAIT_UNTIL_SEC="$(( $(date +%s) + MAX_TBOT_WAIT_SEC ))"
 
 case "${TYPE}" in 
   exec)
@@ -56,9 +58,6 @@ case "${TYPE}" in
     ;;
 esac
 
-[[ -r "${TELEPORT_KUBECONFIG}" ]] \
-  || die "Teleport kubeconfig '${TELEPORT_KUBECONFIG}' isn't readable or doesn't exist"
-
 declare -r ORDINAL="${ORDINAL:-NOT_SET}"
 [[ "${ORDINAL}" =~ ^[0-9][0-9]*$ ]] \
   || die "ORDINAL '${ORDINAL}' not set or not a number. ORDINAL must be set to match the index of a target pod. This should be done by using in Indexed Job and setting it to the annotation 'batch.kubernetes.io/job-completion-index'"
@@ -69,6 +68,20 @@ declare -r TARGET_PREFIX="${TARGET_PREFIX:-}"
 [[ -n "${TARGET_PREFIX}" ]] \
   || die "TARGET_PREFIX not set. Set it to the name of the remote StatefulSet we're running on."
 declare -r TARGET_POD="${TARGET_PREFIX}-${ORDINAL}"
+
+until [[ -r "${TELEPORT_KUBECONFIG}" ]]; do
+  [[ "$(date +%s)" -ge "${TBOT_WAIT_UNTIL_SEC}" ]] \
+    && die "Timed out waiting for Teleport kubeconfig '${TELEPORT_KUBECONFIG}'"
+  printf >&2 "Waiting for Teleport kubeconfig '%s'...\n" "${TELEPORT_KUBECONFIG}"
+  sleep 1
+done
+
+until KUBECONFIG="${TELEPORT_KUBECONFIG}" kubectl get pods >/dev/null 2>&1; do
+  [[ "$(date +%s)" -ge "${TBOT_WAIT_UNTIL_SEC}" ]] \
+    && die "Timed out waiting for Teleport kubectl to work"
+  echo >&2 "Waiting for Teleport kubectl to work..."
+  sleep 1
+done
 
 wait_for_pod() {
   local pod="${1}"

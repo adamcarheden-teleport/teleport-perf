@@ -1,0 +1,18 @@
+#!/bin/bash
+# Renames failed runs, causing the next run to retry rather than report failure.
+set -euo pipefail
+declare -r MY_D="$(readlink -f "$(dirname "${BASH_SOURCE}")")"
+declare -r ROOT_D="$(readlink -f "${MY_D}/..")"
+declare -r RESULTS_D="${ROOT_D}/results"
+declare -r STAT_FILTER="${1:-}"
+
+for status_yaml in "${RESULTS_D}"/*/*.status.yaml; do
+  test="$(basename "$(dirname "${status_yaml}")")"
+  status="$(cat "${status_yaml}" \
+    | yq '.status.conditions[] | select(.type == "Failed" or .type == "Complete") | .type' \
+    | head -n1 \
+    )"
+  [[ -n "${STAT_FILTER}" && "${STAT_FILTER}" != "${status}" ]] && continue
+
+  printf '%s\t%s\n' "${test}" "${status}"
+done

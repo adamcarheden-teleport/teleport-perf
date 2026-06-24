@@ -6,7 +6,3 @@ tbot:
   - type: kubernetes/v2
     selectors:
     - name: my-cluster
-    destination:
-      type: kubernetes_secret
-      name: tperf-tbot
-      namespace: teleport-performance

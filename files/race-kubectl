@@ -39,6 +39,8 @@ declare -r OUT="${OUT:-/dev/shm/output.tsv}"
 declare -r OUT_TARGET_TEMPLATE="${OUT_TARGET_TEMPLATE:-${OUT}.#}"
 declare -r TX_COUNT="${TX_COUNT:-0}"
 declare -r TX_BLOCK_SIZE="${TX_BLOCK_SIZE:-0}"
+[[ "${TX_BLOCK_SIZE}" =~ ^[0-9]+[bkmgBKMG]?$ ]] \
+    || die "TX_BLOCK_SIZE must be valied dd bs input (decimal with optional suffix (b,k,m,g), got '${TX_BLOCK_SIZE}'"
 declare -r TX_INFILE="${TX_INFILE:-/dev/zero}"
 declare -r MAX_READY_WAIT="${MAX_READY_WAIT:-5m}"
 declare -r MAX_TBOT_WAIT_SEC="${MAX_TBOT_WAIT_SEC:-300}"
@@ -132,7 +134,7 @@ run_test() {
     kubectl_args=(get pods)
   fi
 
-  [[ "${TYPE}" == "exec" && "${TX_BLOCK_SIZE}" -gt 0 ]] \
+  [[ "${TYPE}" == "exec" && "${TX_COUNT}" -gt 0 && "${TX_BLOCK_SIZE}" != 0 ]] \
     && read_cmd="dd if=${TX_INFILE} bs=${TX_BLOCK_SIZE} count=${TX_COUNT}"
   
   (

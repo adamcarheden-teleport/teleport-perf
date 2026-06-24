@@ -3,8 +3,8 @@ set -euo pipefail
 declare -r MY_D="$(readlink -f "$(dirname "${BASH_SOURCE}")")"
 declare -r ROOT_D="$(readlink -f "${MY_D}/..")"
 declare -r OUT_D="${OUT_D:-${ROOT_D}/test-config}"
-declare -r ITERATIONS="${ITERATIONS:-30}"
-declare -r REPLICAS_LIST="${REPLICAS_LIST:-2 5}"
+declare -r ITERATIONS="${ITERATIONS:-50}"
+declare -r REPLICAS_LIST="${REPLICAS_LIST:-1 5 10}"
 declare -r STREAM_MODES="${STREAM_MODES:-txrx}"
 declare -r DATA_SIZES="${DATA_SIZES:-1mb:1048576}"
 declare -r BLOCK_SIZES="${BLOCK_SIZES:-64k:64K}"
@@ -47,8 +47,18 @@ count_for() {
   printf "%d\n" "$(( total_bytes / bytes_per_block ))"
 }
 
+output_file() {
+  local replicas="${1}"
+  local iterations="${2}"
+  shift 2
+  local components=("$@")
+  components+=("r${replicas}" "x${iterations}")
+  local IFS='-'
+  printf "%s/%s.yaml\n" "${OUT_D}" "${components[*]}"
+}
+
 for replicas in ${REPLICAS_LIST}; do
-  cat > "${OUT_D}/ls-r${replicas}.yaml" <<EOF
+  cat > "$(output_file "${replicas}" "${ITERATIONS}" ls)" <<EOF
 ---
 iterations: ${ITERATIONS}
 replicas: ${replicas}
@@ -56,7 +66,7 @@ type: "ls"
 command: ""
 EOF
 
-  cat > "${OUT_D}/exec-latency-r${replicas}.yaml" <<EOF
+  cat > "$(output_file "${replicas}" "${ITERATIONS}" exec latency)" <<EOF
 ---
 iterations: ${ITERATIONS}
 replicas: ${replicas}
@@ -83,7 +93,7 @@ EOF
         for stream_mode in ${STREAM_MODES}; do
           case "${stream_mode}" in
             tx)
-              cat > "${OUT_D}/tx-${source}-${size_name}-${block_name}-r${replicas}.yaml" <<EOF
+              cat > "$(output_file "${replicas}" "${ITERATIONS}" tx "${source}" "${size_name}" "${block_name}")" <<EOF
 ---
 iterations: ${ITERATIONS}
 replicas: ${replicas}
@@ -96,7 +106,7 @@ input:
 EOF
               ;;
             rx)
-              cat > "${OUT_D}/rx-${source}-${size_name}-${block_name}-r${replicas}.yaml" <<EOF
+              cat > "$(output_file "${replicas}" "${ITERATIONS}" rx "${source}" "${size_name}" "${block_name}")" <<EOF
 ---
 iterations: ${ITERATIONS}
 replicas: ${replicas}
@@ -105,7 +115,7 @@ command: "dd if=${infile} bs=${block_size} count=${count} status=none"
 EOF
               ;;
             txrx)
-              cat > "${OUT_D}/txrx-${source}-${size_name}-${block_name}-r${replicas}.yaml" <<EOF
+              cat > "$(output_file "${replicas}" "${ITERATIONS}" txrx "${source}" "${size_name}" "${block_name}")" <<EOF
 ---
 iterations: ${ITERATIONS}
 replicas: ${replicas}

@@ -16,6 +16,16 @@ spec:
       labels:
         {{- include "tperf.runner-labels" . | nindent 8 }}
     spec:
+      {{- if .Values.teleport_proxy_ip }}
+      hostAliases:
+      - ip: {{ .Values.teleport_proxy_ip | quote }}
+        hostnames:
+        - {{ required "Please set tbot.clusterName when teleport_proxy_ip is set" .Values.tbot.clusterName | quote }}
+        {{- $proxyHost := regexReplaceAll ":[0-9]+$" .Values.tbot.teleportProxyAddress "" }}
+        {{- if and $proxyHost (ne $proxyHost .Values.tbot.clusterName) }}
+        - {{ $proxyHost | quote }}
+        {{- end }}
+      {{- end }}
       restartPolicy: OnFailure
       serviceAccountName: {{ include "tperf.sa-name" . }}
       containers:

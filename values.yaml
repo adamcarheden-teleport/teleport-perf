@@ -3,6 +3,7 @@
 # Copy these to your values file and fill them in
 
 group: "" # k8s group name for RoleBinding, should match Teleport Role
+teleport_proxy_ip: "" # Optional IP to use as a hostAlias for the Teleport proxy in the runner pod
 
 # See https://github.com/gravitational/teleport/tree/master/examples/chart/tbot
 tbot:

@@ -22,6 +22,14 @@ spec:
       namespace: '*'
       verbs:
       - '*'
+    # Admin rules required to start `tsh proxy kube`
+    rules:
+    - resources:
+      - role
+      - kube_cluster
+      verbs:
+      - read
+      - list
 #    kubernetes_resources:
 #      - kind: selfsubjectrulesreviews
 #        api_group: authorization.k8s.io

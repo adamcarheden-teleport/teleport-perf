@@ -5,6 +5,9 @@
 group: "" # k8s group name for RoleBinding, should match Teleport Role
 teleport_proxy_ip: "" # Optional IP to use as a hostAlias for the Teleport proxy in the runner pod
 
+teleport_image: "public.ecr.aws/gravitational/teleport-distroless-debug"
+teleport_version: "18.9.1"
+
 # See https://github.com/gravitational/teleport/tree/master/examples/chart/tbot
 tbot:
   # Configure these when you deploy this chart
@@ -15,6 +18,13 @@ tbot:
   - type: kubernetes/v2
     selectors:
     - name: "" # Name k8s cluster used when joining Teleport
+    destination:
+      type: kubernetes_secret
+      name: "" # Name tbot uses for secret -- make this unique to this job
+      namespace: "" # Namespace for secret
+  - type: identity
+    allow_reissue: true 
+    roles: []
     destination:
       type: kubernetes_secret
       name: "" # Name tbot uses for secret -- make this unique to this job
@@ -52,5 +62,6 @@ max_wait: "5m"
 backoff_limit: 3
 
 debug_runner_pod: false
+use_tsh_proxy: true
 
 ##############################################################################

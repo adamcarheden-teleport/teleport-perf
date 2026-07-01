@@ -28,6 +28,37 @@ spec:
       {{- end }}
       restartPolicy: OnFailure
       serviceAccountName: {{ include "tperf.sa-name" . }}
+      securityContext:
+        runAsUser: 1001
+        fsGroup: 1001
+      initContainers:
+      - name: useradd
+        image: bitnami/kubectl:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Adding test-runner user"
+          cp -v /etc/passwd /tmp/passwd/
+          echo "test-runner:x:1001:1001:Test Runner:/home/test-runner:/bin/bash" >> /tmp/passwd/passwd
+        volumeMounts:
+        - name: passwd
+          mountPath: /tmp/passwd/
+      - name: copy-teleport
+        image:  {{ printf "%s:%s" .Values.teleport_image .Values.teleport_version | quote }}
+        command:
+        - /busybox/sh
+        - -c
+        - |
+          set -x
+          cp -v /usr/local/bin/tbot /opt/teleport/
+          cp -v /usr/local/bin/teleport /opt/teleport/
+          cp -v /usr/local/bin/tctl /opt/teleport/
+          cp -v /usr/local/bin/tsh /opt/teleport/
+        volumeMounts:
+        - name: bin
+          mountPath: /opt/teleport/
+          readOnly: false
       containers:
       - name: test-runner
         image: bitnami/kubectl:latest
@@ -53,11 +84,15 @@ spec:
         - name: MAX_READY_WAIT
           value: {{ .Values.max_wait | quote }}
         - name: PATH
-          value: /opt/bin:/opt/bitnami/common/bin:/opt/bitnami/kubectl/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin # kubectl
+          value: /opt/bin:/opt/teleport:/opt/bitnami/common/bin:/opt/bitnami/kubectl/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin # kubectl
         - name: TELEPORT_PROXY
           value: {{ .Values.tbot.teleportProxyAddress | quote }}
         - name: TARGET_PREFIX
           value: {{ include "tperf.target-name" . }}
+        - name: K8S_CLUSTER
+          value: {{ (index (index .Values.tbot.services 0).selectors 0).name | quote }}
+        - name: USE_TSH_PROXY
+          value: {{ ternary "true" "" .Values.use_tsh_proxy | quote }}
         - name: OUT
           value: {{ printf "%s/results.tsv" (include "tperf.results-dir" .) }}
         {{- if .Values.debug_runner_pod }}
@@ -65,8 +100,11 @@ spec:
           value: "true"
         {{- end }}
         volumeMounts:
-        - name: tbot
+        - name: tbot-id
           mountPath: /opt/machine-id
+          readOnly: true
+        - name: tbot-k8s
+          mountPath: /opt/machine-k8s
           readOnly: true
         - name: scripts
           mountPath: /opt/bin
@@ -74,15 +112,29 @@ spec:
         - name: results
           mountPath: {{ include "tperf.results-dir" . }}
           readOnly: false
+        - name: bin
+          mountPath: /opt/teleport/
+          readOnly: true
+        - name: passwd
+          mountPath: /etc/passwd
+          subPath: passwd
+          readOnly: true
       volumes:
       # tbot-managed credentials
-      - name: tbot
+      - name: tbot-k8s
         secret:
           secretName: {{ required "Please set tbot.services[0].destination.name to the name of a kubernetes service with a kubernetes_secret destination configured in tbot.services or tbot.outputs values for this chart" (index .Values.tbot.services 0).destination.name }}
+      - name: tbot-id
+        secret:
+          secretName: {{ required "Please set tbot.services[1].destination.name to the name of a kubernetes service with a kubernetes_secret destination configured in tbot.services or tbot.outputs values for this chart" (index .Values.tbot.services 1).destination.name }}
       # Static scripts
       - name: scripts
         configMap:
           name: {{ include "tperf.scripts" . }}
           defaultMode: 0755
       - name: results
+        emptyDir: {}
+      - name: bin 
+        emptyDir: {}
+      - name: passwd
         emptyDir: {}

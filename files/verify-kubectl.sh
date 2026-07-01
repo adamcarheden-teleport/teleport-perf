@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-TELEPORT_KUBECONFIG="/opt/machine-id/kubeconfig.yaml"
+TELEPORT_KUBECONFIG="/opt/machine-k8s/kubeconfig.yaml"
 
 msg() {
   printf >&2 "\n%s\n\n" "${*}"

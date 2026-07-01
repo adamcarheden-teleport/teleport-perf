@@ -46,11 +46,6 @@ else
   debug && msg "Force enabled, skipped checking for existing runs"
 fi
 
-# export because we use them both here and in apply.sh
-export TOKEN
-export DEBUG
-export OVERWRITE
-
 msg "Ensuring shared service account"
 cat <<EOF | run_kubectl apply -f - \
   || die "Failed to apply service account '${SERVICE_ACCOUNT}'"
@@ -60,6 +55,14 @@ metadata:
   name: ${SERVICE_ACCOUNT}
   namespace: ${NAMESPACE}
 EOF
+
+# export because we use them both here and in apply.sh
+export TOKEN
+export DEBUG
+export OVERWRITE
+
+# Used in the helm values
+ROLE="${CLUSTER}-${PROJECT_NAME}"
 
 BOT="${CLUSTER}-${PROJECT_NAME}-bot" \
 ROLE="${CLUSTER}-${PROJECT_NAME}" \
@@ -98,6 +101,8 @@ msg "Ensuring helm deps"
 helm dependency build >&2 . \
   || die "Failed to build deps"
 
+# Order of the -f and --set below matters. We force things that have to be a
+# certain way at the end so they take precedence.
 msg "Installing chart"
 (set -x; helm ${CMD} \
   "${RELEASE}" "${ROOT_D}" \
@@ -108,11 +113,18 @@ msg "Installing chart"
   --set tbot.serviceAccount.create=false \
   --set tbot.serviceAccount.name="${SERVICE_ACCOUNT}" \
   --set tbot.token="${TOKEN}" \
-  --set tbot.services[0].destination.name="${RELEASE}-tbot" \
-  --set tbot.services[0].destination.type="kubernetes_secret" \
-  --set tbot.services[0].destination.namespace="${NAMESPACE}" \
   -f "${JOB_YAML}" \
   -f "${CLUSTER_YAML}" \
+  --set tbot.services[0].type="kubernetes/v2" \
+  --set tbot.services[0].destination.name="${RELEASE}-tbot-k8s" \
+  --set tbot.services[0].destination.type="kubernetes_secret" \
+  --set tbot.services[0].destination.namespace="${NAMESPACE}" \
+  --set tbot.services[1].type="identity" \
+  --set tbot.services[1].destination.name="${RELEASE}-tbot-id" \
+  --set tbot.services[1].destination.type="kubernetes_secret" \
+  --set tbot.services[1].destination.namespace="${NAMESPACE}" \
+  --set tbot.services[1].roles[0]="${ROLE}" \
+  --set tbot.services[1].allow_reissue="true" \
   ${DEBUG_FLAGS} \
   ) \
   || die "Failed to helm"

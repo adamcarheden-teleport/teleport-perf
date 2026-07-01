@@ -17,10 +17,9 @@ on_fail() {
 if debug; then
   set -Ex
   trap on_fail ERR
+  on_fail
 fi
 
-# Mark start in the logs
-date >&2
 
 msg() {
   printf >&2 "%s\n" "${*}"
@@ -31,6 +30,48 @@ die() {
   debug && on_fail
   exit 1
 }
+
+tsh_proxy_kubectl() {
+  # Yes, this flag and envvar are redundant, but this makes the output
+  # explicit about which is in use.
+  (set -x; kubectl --kubeconfig="${KUBECONFIG}" "${@}")
+}
+verify_tsh_proxy() {
+  local runas_msg ctx cl k8s_cl
+
+  # Verify we know what cluster we should be using
+  [[ -n "${K8S_CLUSTER}" ]] || die "K8S_CLUSTER not set. It should be set by helm."
+  runas_msg="Run me as cat: ${0} | tsh -i /opt/machine-id/identity proxy kube ${K8S_CLUSTER} --exec"
+
+  # Verify we have a suspect-tsh-proxy kubeconfig
+  [[ -n "${KUBECONFIG}" ]] || die "KUBECONFIG not set. tsh proxy should set it. ${runas_msg}"
+  
+  # Get the context and cluster
+  ctx="$(tsh_proxy_kubectl config current-context)"
+  cl="$(tsh_proxy_kubectl config view|yq '.contexts[] | select(.name == "'${ctx}'")|.context.cluster')"
+
+  # Make sure we're going through a localhost proxy -- the tell-tale sign we're under tsh proxy
+  tsh_proxy_kubectl config view|yq '.clusters[] | select(.name == "'${cl}'") | .cluster.proxy-url' | grep 'http://127\.0\.0\.1:' || die "Not proxied. ${runas_msg}"
+  
+  # Make sure we're connected to the right cluster
+  k8s_cl="$(tsh_proxy_kubectl config view|yq '.clusters[] | select(.name == "'${cl}'") | .cluster.extensions[]| select(.name == "teleport.kube.name") | .extension')"
+  [[ "${K8S_CLUSTER}" == "${k8s_cl}" ]] || die "Wrong cluster: '${K8S_CLUSTER}' vs '${k8s_cl}'. ${runas_msg}"
+  echo >&2 "SUCCESS: Connected to '${k8s_cl}' through tsh proxy"
+
+}
+
+if [[ -n "${USE_TSH_PROXY}" ]]; then
+  if [[ -z "${RERUN_WITH_TSH_PROXY:-}" ]]; then
+    export RERUN_WITH_TSH_PROXY=true
+    exec tsh -i /opt/machine-id/identity proxy kube "${K8S_CLUSTER}" --exec < "${BASH_SOURCE}"
+    die "This should be unreachable code"
+  fi
+  verify_tsh_proxy
+  TELEPORT_KUBECONFIG="${KUBECONFIG}"
+fi
+
+# Mark start in the logs
+date >&2
 
 declare -r ITERATIONS="${ITERATIONS:-1}"
 declare -r TYPE="${TYPE:-exec}" # TODO: add port-forward and watch test types
@@ -45,7 +86,7 @@ declare -r TX_INFILE="${TX_INFILE:-/dev/zero}"
 declare -r MAX_READY_WAIT="${MAX_READY_WAIT:-5m}"
 declare -r MAX_TBOT_WAIT_SEC="${MAX_TBOT_WAIT_SEC:-300}"
 
-declare -r TELEPORT_KUBECONFIG="${TELEPORT_KUBECONFIG:-/opt/machine-id/kubeconfig.yaml}"
+declare -r TELEPORT_KUBECONFIG="${TELEPORT_KUBECONFIG:-/opt/machine-k8s/kubeconfig.yaml}"
 declare -r TBOT_WAIT_UNTIL_SEC="$(( $(date +%s) + MAX_TBOT_WAIT_SEC ))"
 
 case "${TYPE}" in 
@@ -172,7 +213,8 @@ printf "#%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" \
 for i in $(seq 1 "${ITERATIONS}"); do
 
   # Run without Teleport
-  x_results="$(run_test)" \
+  # Unsetting the envvar ensures we don't use the tsh proxy kubeconfig
+  x_results="$(KUBECONFIG='' run_test)" \
     || die "Failed to run iteration '${i}' without Teleport"
   IFS=$'\t' read -r x_start x_end x_ret <<< "${x_results}"
   
@@ -181,7 +223,7 @@ for i in $(seq 1 "${ITERATIONS}"); do
     || die "Failed to run iteration '${i}' with Teleport"
   IFS=$'\t' read -r t_start t_end t_ret <<< "${t_results}"
 
-  # Append results to putput file
+  # Append results to output file
   printf "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n" \
     "${ORDINAL}" "${i}" \
     "${x_start}" "${x_end}" "${x_ret}" \

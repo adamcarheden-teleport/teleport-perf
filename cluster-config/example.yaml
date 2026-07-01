@@ -3,6 +3,5 @@ tbot:
   clusterName: "my-teleport.example.com"
   teleportProxyAddress: "my-teleport.example.com:443"
   services:
-  - type: kubernetes/v2
-    selectors:
+  - selectors:
     - name: my-cluster
